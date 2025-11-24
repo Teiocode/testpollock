@@ -38,20 +38,17 @@ function closeQrPopup() {
 // 1. CONFIGURATION ET PALETTES
 // ============================================================
 
-// --- MODIFICATION ICI : PALETTE VIVE (HUMAIN) ---
-const PALETTE = [
-    '#FFD700', // Jaune
-    '#FFA500', // Orange
-    '#FF0000', // Rouge
-    '#0000FF', // Bleu
-    '#00BFFF', // Bleu clair (Deep Sky Blue)
-    '#00008B', // Bleu foncé
-    '#FFFFFF'  // Blanc
-];
+const PALETTE = ['#FF0000', '#0000FF', '#FFD700', '#32CD32', '#9400D3', '#FF8C00', '#00CED1'];
 
-// Palette NEUTRE pour le mode aléatoire (IA)
+// CORRECTION ICI : J'ai enlevé le blanc pur et assombri le beige pour qu'on les voie bien sur le fond blanc.
 const NEUTRAL_PALETTE = [
-    '#2F2F2F', '#696969', '#808080', '#A9A9A9', '#C0C0C0', '#BCB88A', '#8B8560'
+    '#2F2F2F', // Gris très foncé (presque noir)
+    '#696969', // DimGray
+    '#808080', // Gris
+    '#A9A9A9', // DarkGray
+    '#C0C0C0', // Silver (Gris clair visible)
+    '#BCB88A', // Beige Sage (Visible)
+    '#8B8560'  // Taupe (Visible)
 ];
 
 const POSSIBLE_ROLES = [
@@ -80,6 +77,7 @@ class Painter {
     constructor(id) {
         this.id = id;
         
+        // Initialisation des vecteurs
         this.pos = createVector(width / 2, height / 2);
         this.prevPos = createVector(width / 2, height / 2);
         this.target = createVector(width / 2, height / 2);
@@ -94,13 +92,21 @@ class Painter {
         this.lastMoveTime = Date.now(); 
         this.isActive = false; 
 
+        // On assigne les couleurs et rôles
         this.assignRandomRole();
     }
 
     assignRandomRole() {
         this.role = random(POSSIBLE_ROLES);
+        
+        // CORRECTION : On s'assure que les couleurs sont bien choisies à chaque reset
         this.color = color(random(PALETTE));
-        this.neutralColor = color(random(NEUTRAL_PALETTE));
+        
+        // CORRECTION : On choisit une couleur neutre VISIBLE
+        // random(NEUTRAL_PALETTE) renvoie une string (ex: '#808080')
+        // color() la transforme en objet p5 utilisable
+        let randomNeutral = random(NEUTRAL_PALETTE);
+        this.neutralColor = color(randomNeutral);
     }
 
     respawn(x, y) {
@@ -109,6 +115,7 @@ class Painter {
         this.target.set(x, y);
         this.rawTarget.set(x, y);
         this.lastMoveTime = Date.now(); 
+        // Note: on ne change PAS la couleur au respawn automatique pour garder la cohérence
         this.role = random(POSSIBLE_ROLES);
     }
 
@@ -162,6 +169,9 @@ class Painter {
     drawPaint(layer, useNeutralPalette) {
         if (!this.isActive) return;
 
+        // SÉLECTION DE LA COULEUR : Neutre ou Vive
+        let paintColor = useNeutralPalette ? this.neutralColor : this.color;
+
         let speed = this.vel.mag();
         let distMoved = dist(this.prevPos.x, this.prevPos.y, this.pos.x, this.pos.y);
         let timeStill = Date.now() - this.lastMoveTime;
@@ -169,16 +179,14 @@ class Painter {
         const WAIT_TIME = 1000; 
         const MAX_BLOT_RADIUS = 120 * this.scaleFactor;
 
-        // Choix de la couleur pour les taches immobiles
-        let baseFixedColor = useNeutralPalette ? this.neutralColor : this.color;
-
         // 1. TACHES (IMMOBILE)
         if (timeStill > WAIT_TIME) {
             layer.noStroke();
             let growthDuration = timeStill - WAIT_TIME;
             let alphaVal = min(map(growthDuration, 0, 500, 0, 200), 200);
             
-            let c = color(baseFixedColor); 
+            // On clone la couleur pour ne pas modifier l'originale
+            let c = color(paintColor); 
             c.setAlpha(alphaVal);
             layer.fill(c);
 
@@ -203,21 +211,11 @@ class Painter {
         
         // 2. TRAITS (MOUVEMENT)
         else if (distMoved > 2) { 
-            
-            let strokeColor;
-
-            if (useNeutralPalette) {
-                strokeColor = this.neutralColor;
-            } else {
-                // Mode Humain : Couleur aléatoire dans la nouvelle palette
-                strokeColor = color(random(PALETTE));
-            }
-
             let strokeW = map(speed, 0, this.maxSpeed, 35, 4);
             strokeW = constrain(strokeW, 4, 45);
             strokeW *= this.scaleFactor;
 
-            layer.stroke(strokeColor);
+            layer.stroke(paintColor);
             layer.strokeWeight(strokeW);
             layer.strokeCap(ROUND);
             layer.strokeJoin(ROUND);
@@ -227,7 +225,7 @@ class Painter {
             // Gouttes
             if (speed > 20 && random() > 0.9) {
                 layer.noStroke();
-                let dripCol = color(strokeColor);
+                let dripCol = color(paintColor);
                 dripCol.setAlpha(180);
                 layer.fill(dripCol);
                 let rs = random(2, 8) * this.scaleFactor;
@@ -341,7 +339,7 @@ function draw() {
     // LOGIQUE PRINCIPALE
     // ==========================================================
     
-    // CAS 1 : HUMAIN DÉTECTÉ
+    // CAS 1 : HUMAIN DÉTECTÉ -> DESSIN EN COULEUR VIVE
     if (poses.length > 0) {
         for (let i = 0; i < poses.length; i++) {
             if (i < painters.length) {
@@ -366,7 +364,7 @@ function draw() {
 
                     painter.update(targetX, targetY, depthScale);
                     
-                    // Palette Vive et Humain
+                    // ON DESSINE SUR LE CALQUE HUMAIN, EN COULEUR VIVE (false)
                     painter.drawPaint(pgHuman, false);
                     
                     painter.drawUI(); 
@@ -374,11 +372,11 @@ function draw() {
             }
         }
     } 
-    // CAS 2 : PERSONNE -> MODE ALÉATOIRE
+    // CAS 2 : PERSONNE -> DESSIN AUTOMATIQUE EN COULEURS NEUTRES
     else {
         painters.forEach(painter => {
             painter.wander(); 
-            // Palette Neutre et IA
+            // ON DESSINE SUR LE CALQUE RANDOM, EN NEUTRE (true)
             painter.drawPaint(pgRandom, true);  
         });
     }
@@ -412,6 +410,7 @@ function keyPressed() {
         peer.on("connection", conn => {
             p2pConnection = conn;
             conn.on("open", () => {
+                console.log("Téléphone connecté : envoi de l’image...");
                 conn.send({ type: "image", data: imgData });
             });
         });
@@ -421,6 +420,7 @@ function keyPressed() {
 function resetCanvas() {
     pgHuman.clear();
     pgRandom.clear();
+    // On réinitialise aussi les couleurs
     painters.forEach(p => p.assignRandomRole());
 }
 
