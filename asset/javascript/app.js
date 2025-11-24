@@ -3,7 +3,7 @@
 // ============================================================
 // 0. P2P + QR CODE
 // ============================================================
-// (Cette section ne change pas)
+
 let peer = new Peer();
 let p2pConnection = null;
 
@@ -38,19 +38,18 @@ function closeQrPopup() {
 // 1. CONFIGURATION
 // ============================================================
 
-// Palette pour les humains (Couleurs vives)
-const PALETTE_HUMAN = ['#FF0000', '#0000FF', '#FFD700', '#32CD32', '#9400D3', '#FF8C00', '#00CED1'];
+// Palette VIVE pour les humains
+const PALETTE = ['#FF0000', '#0000FF', '#FFD700', '#32CD32', '#9400D3', '#FF8C00', '#00CED1'];
 
-// --- NOUVEAU : Palette pour le mode aléatoire (Noir, Beige, Gris, Blanc) ---
-const PALETTE_AUTONOMOUS = [
-    '#000000', // Noir pur
-    '#FFFFFF', // Blanc pur
-    '#F5F5DC', // Beige classique
-    '#E8D6B3', // Beige plus chaud/sable
-    '#DCDCDC', // Gris très clair (Gainsboro)
-    '#A9A9A9', // Gris foncé
+// --- NOUVEAU : Palette NEUTRE pour le mode aléatoire ---
+const NEUTRAL_PALETTE = [
+    '#000000', // Noir
+    '#FFFFFF', // Blanc
     '#808080', // Gris moyen
-    '#F8F8FF'  // Blanc cassé (GhostWhite)
+    '#A9A9A9', // Gris foncé
+    '#D3D3D3', // Gris clair
+    '#F5F5DC', // Beige classique
+    '#E8DCCA'  // Beige crème
 ];
 
 const POSSIBLE_ROLES = [
@@ -61,7 +60,7 @@ const POSSIBLE_ROLES = [
 ];
 
 let videoEl, poseNet;
-// Deux calques distincts : Fond (Autonome) et Devant (Humain)
+// Deux calques distincts : Fond (Neutre) et Devant (Couleur vive)
 let pgHuman, pgRandom; 
 
 let poses = [];
@@ -81,14 +80,14 @@ class Painter {
         this.id = id;
         this.assignRandomRole(); 
         
-        // --- MODIFICATION DES COULEURS ---
+        // --- COULEURS ---
+        // 1. Couleur VIVE pour le mode humain
+        this.color = color(random(PALETTE));
         
-        // 1. Couleur vive pour quand un humain contrôle
-        this.humanColor = color(random(PALETTE_HUMAN));
-        
-        // 2. Couleur Noir/Beige/Gris pour quand c'est autonome
-        // Chaque peintre reçoit une couleur fixe de cette palette
-        this.autonomousColor = color(random(PALETTE_AUTONOMOUS));
+        // --- MODIFICATION ICI ---
+        // 2. Couleur NEUTRE pour le mode IA (Noir, Blanc, Gris, Beige)
+        // On choisit aléatoirement dans la nouvelle palette neutre
+        this.neutralColor = color(random(NEUTRAL_PALETTE));
 
         this.pos = createVector(width / 2, height / 2);
         this.prevPos = createVector(width / 2, height / 2);
@@ -110,6 +109,7 @@ class Painter {
 
     assignRandomRole() {
         this.role = random(POSSIBLE_ROLES);
+        // On garde les mêmes couleurs assignées au départ
     }
 
     respawn(x, y) {
@@ -169,13 +169,13 @@ class Painter {
         }
     }
 
-    // --- DESSIN : Gère le choix de la palette ---
-    // Paramètre 'useAutonomousPalette' : true = Noir/Beige/Gris, false = Couleurs vives
-    drawPaint(layer, useAutonomousPalette) {
+    // --- DESSIN : Gère le choix Couleur vs Neutre ---
+    drawPaint(layer, useNeutralPalette) {
         if (!this.isActive) return;
 
-        // Sélection de la couleur à utiliser pour cette frame
-        let paintColor = useAutonomousPalette ? this.autonomousColor : this.humanColor;
+        // Choix de la couleur : Palette Neutre si demandé, sinon Palette Vive
+        // MODIFICATION ICI : on utilise this.neutralColor
+        let paintColor = useNeutralPalette ? this.neutralColor : this.color;
 
         let speed = this.vel.mag();
         let distMoved = dist(this.prevPos.x, this.prevPos.y, this.pos.x, this.pos.y);
@@ -324,16 +324,16 @@ function draw() {
 
     // Affichage du fond selon le mode
     if (bgMode === 0) { 
-        background(255); // Fond blanc par défaut
+        background(255);
         videoEl.style.opacity = 0; 
     } 
     else if (bgMode === 1) { 
-        background(0); // Fond noir
+        background(0);
         videoEl.style.opacity = 0; 
     } 
     else if (bgMode === 2) { 
         clear();
-        videoEl.style.opacity = 1; // Fond vidéo
+        videoEl.style.opacity = 1; 
     }
 
     // On affiche d'abord le calque "Random" (fond) puis le calque "Humain" (devant)
@@ -346,7 +346,7 @@ function draw() {
     // LOGIQUE PRINCIPALE
     // ==========================================================
     
-    // CAS 1 : HUMAIN DÉTECTÉ -> DESSIN EN COULEURS VIVES
+    // CAS 1 : HUMAIN DÉTECTÉ -> DESSIN EN COULEUR VIVE
     if (poses.length > 0) {
         for (let i = 0; i < poses.length; i++) {
             if (i < painters.length) {
@@ -371,8 +371,7 @@ function draw() {
 
                     painter.update(targetX, targetY, depthScale);
                     
-                    // ON DESSINE SUR LE CALQUE HUMAIN
-                    // false = Utiliser palette humaine (couleurs vives)
+                    // ON DESSINE SUR LE CALQUE HUMAIN, EN COULEUR VIVE (false)
                     painter.drawPaint(pgHuman, false);
                     
                     painter.drawUI(); 
@@ -380,12 +379,11 @@ function draw() {
             }
         }
     } 
-    // CAS 2 : PERSONNE -> DESSIN AUTOMATIQUE EN NOIR/BEIGE/GRIS
+    // CAS 2 : PERSONNE -> DESSIN AUTOMATIQUE EN COULEURS NEUTRES
     else {
         painters.forEach(painter => {
             painter.wander(); 
-            // ON DESSINE SUR LE CALQUE RANDOM
-            // true = Utiliser palette autonome (Noir/Beige/Gris)
+            // ON DESSINE SUR LE CALQUE RANDOM, EN NEUTRE (true)
             painter.drawPaint(pgRandom, true);  
         });
     }
@@ -411,8 +409,8 @@ function keyPressed() {
         if (bgMode === 1) exportPg.background(0);
         else exportPg.background(255);
 
-        exportPg.image(pgRandom, 0, 0); // Fond N&B/Beige
-        exportPg.image(pgHuman, 0, 0);  // Devant Couleur vives
+        exportPg.image(pgRandom, 0, 0); // Fond Neutre
+        exportPg.image(pgHuman, 0, 0);  // Devant Vive
         
         const imgData = exportPg.elt.toDataURL("image/png");
         
@@ -430,6 +428,7 @@ function keyPressed() {
 function resetCanvas() {
     pgHuman.clear();
     pgRandom.clear();
+    // On garde les mêmes peintres pour ne pas changer leurs couleurs brusquement
 }
 
 function windowResized() {
