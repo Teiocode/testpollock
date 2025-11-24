@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Photography | Teio</title>
+	<link rel="stylesheet" href="asset/css/style.css"/>    
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <script src="asset/javascript/app.js" defer></script>
+</head>
+<body>
+<video id="video-feed" playsinline autoplay muted></video>
+        
+    <div class="fixed bottom-10 left-0 right-0 z-20">
+        <div class="flex justify-center pb-4">
+             <button onclick="resetCanvas()" class="pointer-events-auto bg-white/10 hover:bg-yellow-600 text-white px-8 py-3 rounded-full backdrop-blur font-bold uppercase transition-all border border-white/30 shadow-lg">
+                Nouvelle Toile
+             </button>
+        </div>
+    </div>
+
+    <main id="canvas-container"></main>
+
+    <div id="qr-overlay" class="hidden fixed inset-0 bg-black/90 z-50 flex items-center justify-center backdrop-blur-md transition-opacity duration-300 opacity-0">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl text-center max-w-sm w-full transform scale-90 transition-transform duration-300" id="qr-modal-box">
+            
+            <div id="qr-loading" class="hidden flex flex-col items-center py-4">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-yellow-500 mb-4"></div>
+                <p class="text-gray-600 font-bold animate-pulse">Création du lien sécurisé...</p>
+            </div>
+
+            <div id="qr-result" class="hidden">
+                <h2 class="text-2xl font-bold mb-2 text-gray-800">Scan pour récupérer</h2>
+                <p class="text-xs text-gray-500 mb-4">Connexion directe P2P (Sans serveur)</p>
+                
+                <div id="qrcode-container" class="flex justify-center mb-6 p-2 bg-white rounded border border-gray-100"></div>
+                
+                <button onclick="closeQrPopup()" class="bg-black hover:bg-gray-800 text-white font-bold py-3 px-8 rounded-full transition-all w-full">
+                    Fermer
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="mobile-receiver" class="hidden fixed inset-0 bg-black z-[100] flex flex-col items-center justify-center p-4 text-white text-center">
+        <h1 class="text-xl font-bold mb-4">Réception de l'œuvre...</h1>
+        <p id="status-msg" class="text-gray-400 text-sm mb-6 animate-pulse">Connexion à l'installation...</p>
+        <img id="received-image" class="max-w-full max-h-[80vh] border-4 border-white shadow-2xl hidden rounded-lg" alt="Oeuvre reçue">
+        <p class="mt-4 text-xs text-gray-500">Maintenez l'image appuyée pour l'enregistrer</p>
+    </div>
+
+</body>
+</html>

@@ -1,0 +1,42 @@
+body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
+        
+        /* Dans ton CSS */
+
+#video-feed {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    object-fit: cover;
+    transform: scaleX(-1); /* Miroir */
+    
+    /* C'EST ICI QU'IL FAUT CHANGER */
+    opacity: 1; /* AVANT c'était 0.4. Mettre 1 rend la vidéo 100% visible */
+    
+    z-index: 0;
+}
+        
+        /* Canvas p5.js par dessus */
+        #canvas-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            z-index: 10;
+        }
+
+/* État visible du popup */
+#qr-overlay.show {
+    opacity: 1;
+    pointer-events: auto; /* Réactive les clics */
+}
+
+/* État visible de la boîte à l'intérieur */
+#qr-overlay.show #qr-modal-box {
+    transform: scale(1);
+}
+
+/* État caché (par défaut via la classe Tailwind 'hidden' et 'opacity-0') */
+#qr-overlay.hidden {
+    pointer-events: none;
+}
