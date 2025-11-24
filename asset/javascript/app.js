@@ -38,7 +38,7 @@ function closeQrPopup() {
 // 1. CONFIGURATION ET PALETTES
 // ============================================================
 
-// Palette VIVE pour les humains (Jaune, Orange, Rouge, Bleus, Blanc)
+// --- MODIFICATION ICI : PALETTE VIVE (HUMAIN) ---
 const PALETTE = [
     '#FFD700', // Jaune
     '#FFA500', // Orange
@@ -209,7 +209,7 @@ class Painter {
             if (useNeutralPalette) {
                 strokeColor = this.neutralColor;
             } else {
-                // Mode Humain : Couleur aléatoire dans la palette vive
+                // Mode Humain : Couleur aléatoire dans la nouvelle palette
                 strokeColor = color(random(PALETTE));
             }
 
@@ -236,7 +236,31 @@ class Painter {
         }
     }
     
-    // MODIFICATION : J'ai supprimé entièrement la fonction drawUI() ici
+    drawUI() {
+        if (!this.isActive) return;
+        
+        noStroke();
+        fill(255, 200);
+        
+        let textSizeScaled = constrain(12 * this.scaleFactor, 8, 16);
+        textSize(textSizeScaled);
+        textStyle(BOLD);
+        
+        drawingContext.shadowBlur = 4;
+        drawingContext.shadowColor = "black";
+        text(this.role.label, this.pos.x + (15 * this.scaleFactor), this.pos.y);
+        drawingContext.shadowBlur = 0;
+
+        let timeStill = Date.now() - this.lastMoveTime;
+        if (timeStill > 0 && timeStill < 1000) {
+             noFill();
+             stroke(255, 180);
+             strokeWeight(3 * this.scaleFactor);
+             let rad = 25 * this.scaleFactor;
+             let progress = map(timeStill, 0, 1000, 0, TWO_PI);
+             arc(this.pos.x, this.pos.y, rad, rad, -HALF_PI, -HALF_PI + progress);
+        }
+    }
 }
 
 
@@ -345,7 +369,7 @@ function draw() {
                     // Palette Vive et Humain
                     painter.drawPaint(pgHuman, false);
                     
-                    // MODIFICATION : Suppression de painter.drawUI()
+                    painter.drawUI(); 
                 }
             }
         }
