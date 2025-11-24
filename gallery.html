@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Galerie Live | Teio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    
+    <style>
+        body { background-color: #111; color: white; }
+        .fade-in { animation: fadeIn 0.5s ease-out forwards; opacity: 0; transform: translateY(20px); }
+        @keyframes fadeIn { to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="min-h-screen p-4">
+
+    <header class="text-center mb-8 pt-4">
+        <h1 class="text-3xl font-bold text-yellow-500 tracking-widest uppercase">Galerie Live</h1>
+        <p class="text-gray-400 text-sm mt-2" id="status">Connexion à l'installation...</p>
+    </header>
+
+    <main id="gallery-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
+        </main>
+    
+    <div id="empty-msg" class="text-center text-gray-600 mt-20">
+        <p>En attente de nouvelles captures...</p>
+    </div>
+
+    <script>
+        // 1. Récupérer l'ID de l'installation depuis l'URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const hostId = urlParams.get('id');
+
+        const statusEl = document.getElementById('status');
+        const gridEl = document.getElementById('gallery-grid');
+        const emptyMsg = document.getElementById('empty-msg');
+
+        if (!hostId) {
+            statusEl.innerText = "Erreur : Lien invalide (Manque ID)";
+            statusEl.className = "text-red-500 font-bold";
+        } else {
+            // 2. Initialiser PeerJS
+            const peer = new Peer(); // L'ID du visiteur est auto-généré
+
+            peer.on('open', (myId) => {
+                console.log("Visiteur connecté : " + myId);
+                
+                // 3. Se connecter à l'ordinateur principal
+                const conn = peer.connect(hostId);
+
+                conn.on('open', () => {
+                    statusEl.innerText = "🟢 Connecté au direct";
+                    statusEl.className = "text-green-400 text-sm mt-2 animate-pulse";
+                });
+
+                conn.on('close', () => {
+                    statusEl.innerText = "🔴 Déconnecté";
+                    statusEl.className = "text-red-400 text-sm mt-2";
+                });
+
+                // 4. RÉCEPTION D'UNE IMAGE
+                conn.on('data', (data) => {
+                    if (data.file) {
+                        addImageToGallery(data.file);
+                    }
+                });
+            });
+
+            peer.on('error', (err) => {
+                console.error(err);
+                statusEl.innerText = "Erreur de connexion (Relancez la page)";
+            });
+        }
+
+        function addImageToGallery(blob) {
+            // Cacher le message "Vide"
+            if(emptyMsg) emptyMsg.style.display = 'none';
+
+            // Créer l'URL de l'image
+            const url = URL.createObjectURL(blob);
+
+            // Créer les éléments HTML
+            const wrapper = document.createElement('div');
+            wrapper.className = "bg-white/10 p-2 rounded-lg shadow-xl fade-in border border-white/20";
+            
+            const img = document.createElement('img');
+            img.src = url;
+            img.className = "w-full h-auto rounded";
+            img.alt = "Oeuvre capturée";
+
+            const info = document.createElement('div');
+            info.className = "flex justify-between items-center mt-2 px-1";
+            
+            const time = new Date().toLocaleTimeString();
+            info.innerHTML = `
+                <span class="text-xs text-gray-400">${time}</span>
+                <a href="${url}" download="teio-art.png" class="text-xs font-bold text-yellow-500 hover:text-yellow-400 uppercase">Télécharger</a>
+            `;
+
+            wrapper.appendChild(img);
+            wrapper.appendChild(info);
+
+            // Ajouter AU DÉBUT de la grille (prepend)
+            gridEl.prepend(wrapper);
+        }
+    </script>
+</body>
+</html>
