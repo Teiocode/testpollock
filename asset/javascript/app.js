@@ -38,18 +38,18 @@ function closeQrPopup() {
 // 1. CONFIGURATION ET PALETTES
 // ============================================================
 
-// Palette VIVE (Mode Humain) : Jaune, Orange, Rouge, Bleus, Blanc
+// Palette VIVE pour les humains (Jaune, Orange, Rouge, Bleus, Blanc)
 const PALETTE = [
     '#FFD700', // Jaune
     '#FFA500', // Orange
     '#FF0000', // Rouge
     '#0000FF', // Bleu
-    '#00BFFF', // Bleu clair
+    '#00BFFF', // Bleu clair (Deep Sky Blue)
     '#00008B', // Bleu foncé
     '#FFFFFF'  // Blanc
 ];
 
-// Palette NEUTRE (Mode IA) : Gris, Beige, Noir
+// Palette NEUTRE pour le mode aléatoire (IA)
 const NEUTRAL_PALETTE = [
     '#2F2F2F', '#696969', '#808080', '#A9A9A9', '#C0C0C0', '#BCB88A', '#8B8560'
 ];
@@ -169,7 +169,7 @@ class Painter {
         const WAIT_TIME = 1000; 
         const MAX_BLOT_RADIUS = 120 * this.scaleFactor;
 
-        // Couleur fixe pour les taches (immobile)
+        // Choix de la couleur pour les taches immobiles
         let baseFixedColor = useNeutralPalette ? this.neutralColor : this.color;
 
         // 1. TACHES (IMMOBILE)
@@ -209,7 +209,7 @@ class Painter {
             if (useNeutralPalette) {
                 strokeColor = this.neutralColor;
             } else {
-                // Couleurs vives aléatoires en mouvement
+                // Mode Humain : Couleur aléatoire dans la palette vive
                 strokeColor = color(random(PALETTE));
             }
 
@@ -236,7 +236,7 @@ class Painter {
         }
     }
     
-    // --- J'AI SUPPRIMÉ LA FONCTION drawUI() ICI ---
+    // MODIFICATION : J'ai supprimé entièrement la fonction drawUI() ici
 }
 
 
@@ -345,7 +345,7 @@ function draw() {
                     // Palette Vive et Humain
                     painter.drawPaint(pgHuman, false);
                     
-                    // --- SUPPRESSION DE L'APPEL A painter.drawUI() ---
+                    // MODIFICATION : Suppression de painter.drawUI()
                 }
             }
         }
@@ -362,7 +362,7 @@ function draw() {
 
 
 // ============================================================
-// 5. ÉVÉNEMENTS CLAVIER ET RESET
+// 5. ÉVÉNEMENTS CLAVIER
 // ============================================================
 
 function keyPressed() {
@@ -405,10 +405,6 @@ function windowResized() {
     pgHuman = createGraphics(windowWidth, windowHeight);
     pgRandom = createGraphics(windowWidth, windowHeight);
 }
-
-// ============================================================
-// 6. UTILITAIRES POSE
-// ============================================================
 
 function isPoseValid(pose) {
     if (pose.score < 0.2) return false;
