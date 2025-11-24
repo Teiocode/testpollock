@@ -1,7 +1,7 @@
 'use strict';
 
 // ============================================================
-// 0. P2P + QR CODE (AJOUTÉ)
+// 0. P2P + QR CODE
 // ============================================================
 
 let peer = new Peer();     // Création du peer
@@ -34,7 +34,6 @@ function closeQrPopup() {
 }
 
 
-
 // ============================================================
 // 1. CONFIGURATION
 // ============================================================
@@ -58,9 +57,8 @@ let modeTimer = 0;
 const RESET_DELAY = 15000; // 15 secondes avant retour automatique au blanc
 
 
-
 // ============================================================
-// 2. CLASSE PAINTER (identique à ton code)
+// 2. CLASSE PAINTER
 // ============================================================
 
 class Painter {
@@ -99,6 +97,26 @@ class Painter {
         this.rawTarget.set(x, y);
         this.lastMoveTime = Date.now(); 
         this.assignRandomRole(); 
+    }
+
+    // --- NOUVEAU : FONCTION DE MOUVEMENT AUTONOME (Mode Random) ---
+    wander() {
+        this.isActive = true;
+
+        // Utilisation de noise() pour des mouvements fluides (pas chaotiques)
+        // Les valeurs changent doucement en fonction du temps (frameCount)
+        let nX = noise(this.id * 100, frameCount * 0.003); 
+        let nY = noise(this.id * 200 + 500, frameCount * 0.003);
+
+        // Mapper le bruit (0-1) vers les dimensions de l'écran (avec une marge externe)
+        let tx = map(nX, 0, 1, -100, width + 100);
+        let ty = map(nY, 0, 1, -100, height + 100);
+
+        // Faire varier légèrement la taille du pinceau
+        let autoScale = map(sin(frameCount * 0.02 + this.id), -1, 1, 0.6, 1.4);
+
+        // Utiliser la fonction physique existante pour aller vers ce point
+        this.update(tx, ty, autoScale);
     }
 
     update(rawX, rawY, newScale) {
@@ -225,7 +243,6 @@ class Painter {
 }
 
 
-
 // ============================================================
 // 3. SETUP
 // ============================================================
@@ -270,7 +287,6 @@ function modelReady() {
 }
 
 
-
 // ============================================================
 // 4. DRAW
 // ============================================================
@@ -298,40 +314,54 @@ function draw() {
 
     painters.forEach(p => p.isActive = false);
 
-    for (let i = 0; i < poses.length; i++) {
-        if (i < painters.length) {
-            let pose = poses[i].pose;
-            let painter = painters[i];
+    // ==========================================================
+    // LOGIQUE MODIFIÉE : DÉTECTION vs RANDOM
+    // ==========================================================
+    
+    // Si au moins une personne est détectée
+    if (poses.length > 0) {
+        for (let i = 0; i < poses.length; i++) {
+            if (i < painters.length) {
+                let pose = poses[i].pose;
+                let painter = painters[i];
 
-            if (!isPoseValid(pose)) continue;
+                if (!isPoseValid(pose)) continue;
 
-            let data = getBodyPartCoordinates(pose, painter.role);
-            let depthScale = calculateDepthScale(pose);
+                let data = getBodyPartCoordinates(pose, painter.role);
+                let depthScale = calculateDepthScale(pose);
 
-            if (data.score > 0.2) {
-                let targetX = data.x;
-                let targetY = data.y;
+                if (data.score > 0.2) {
+                    let targetX = data.x;
+                    let targetY = data.y;
 
-                if (dist(painter.pos.x, painter.pos.y, targetX, targetY) > 300) {
-                    painter.respawn(targetX, targetY);
-                    data = getBodyPartCoordinates(pose, painter.role); 
-                    targetX = data.x; 
-                    targetY = data.y;
+                    if (dist(painter.pos.x, painter.pos.y, targetX, targetY) > 300) {
+                        painter.respawn(targetX, targetY);
+                        data = getBodyPartCoordinates(pose, painter.role); 
+                        targetX = data.x; 
+                        targetY = data.y;
+                    }
+
+                    painter.update(targetX, targetY, depthScale);
+                    
+                    painter.drawPaint(pg);
+                    painter.drawUI(); // On affiche les labels quand c'est humain
                 }
-
-                painter.update(targetX, targetY, depthScale);
-                
-                painter.drawPaint(pg);
-                painter.drawUI();
             }
         }
+    } 
+    // Si PERSONNE n'est détecté : Mode Œuvre Random
+    else {
+        painters.forEach(painter => {
+            painter.wander();       // Calcul du mouvement aléatoire
+            painter.drawPaint(pg);  // Dessin
+            // Pas de drawUI() ici pour un look plus abstrait
+        });
     }
 }
 
 
-
 // ============================================================
-// 5. ÉVÉNEMENTS CLAVIER (MODIFIÉ)
+// 5. ÉVÉNEMENTS CLAVIER
 // ============================================================
 
 function keyPressed() {
@@ -342,16 +372,9 @@ function keyPressed() {
         if (bgMode === 1 || bgMode === 2) modeTimer = Date.now();
     }
 
-    // ========= NOUVEAU → Capture + QR Code + envoi P2P ========
     if (key === 'e' || key === 'E') {
-
-        // 1) Convertit le calque en image
         const imgData = pg.elt.toDataURL("image/png");
-
-        // 2) Ouvre le QR code avec l’ID PeerJS
         openQrPopup(peer.id);
-
-        // 3) Attendre la connexion du mobile
         peer.on("connection", conn => {
             p2pConnection = conn;
             conn.on("open", () => {
