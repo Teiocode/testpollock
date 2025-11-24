@@ -3,7 +3,7 @@
 // ============================================================
 // 0. P2P + QR CODE
 // ============================================================
-
+// (Cette section n'a pas changé)
 let peer = new Peer();
 let p2pConnection = null;
 
@@ -48,7 +48,6 @@ const POSSIBLE_ROLES = [
 ];
 
 let videoEl, poseNet;
-// MODIFICATION ICI : On crée deux calques au lieu d'un seul
 let pgHuman, pgRandom; 
 
 let poses = [];
@@ -60,7 +59,7 @@ const RESET_DELAY = 15000;
 
 
 // ============================================================
-// 2. CLASSE PAINTER
+// 2. CLASSE PAINTER (MODIFIÉE POUR N&B vs COULEUR)
 // ============================================================
 
 class Painter {
@@ -68,7 +67,17 @@ class Painter {
         this.id = id;
         this.assignRandomRole(); 
         
+        // --- MODIFICATION N&B ICI ---
+        // 1. On définit la couleur normale
         this.color = color(random(PALETTE));
+        
+        // 2. On calcule sa version Noir et Blanc (Grayscale)
+        // On prend la moyenne du Rouge, Vert, Bleu pour obtenir un gris
+        let grayValue = (red(this.color) + green(this.color) + blue(this.color)) / 3;
+        // On crée la couleur N&B correspondante
+        this.bwColor = color(grayValue, grayValue, grayValue);
+
+
         this.pos = createVector(width / 2, height / 2);
         this.prevPos = createVector(width / 2, height / 2);
         this.target = createVector(width / 2, height / 2);
@@ -89,7 +98,7 @@ class Painter {
 
     assignRandomRole() {
         this.role = random(POSSIBLE_ROLES);
-        this.color = color(random(PALETTE)); 
+        // Note: on ne change pas la couleur au respawn pour garder l'identité visuelle du peintre
     }
 
     respawn(x, y) {
@@ -148,9 +157,13 @@ class Painter {
         }
     }
 
-    // Cette fonction reçoit maintenant un calque spécifique (layer)
-    drawPaint(layer) {
+    // --- MODIFICATION N&B ICI ---
+    // On ajoute un paramètre 'drawInBW' (booléen : vrai ou faux)
+    drawPaint(layer, drawInBW) {
         if (!this.isActive) return;
+
+        // 1. Choix de la couleur de base selon le mode
+        let baseColor = drawInBW ? this.bwColor : this.color;
 
         let speed = this.vel.mag();
         let distMoved = dist(this.prevPos.x, this.prevPos.y, this.pos.x, this.pos.y);
@@ -159,12 +172,14 @@ class Painter {
         const WAIT_TIME = 1000; 
         const MAX_BLOT_RADIUS = 120 * this.scaleFactor;
 
+        // Mode Tache (quand immobile)
         if (timeStill > WAIT_TIME) {
             layer.noStroke();
             let growthDuration = timeStill - WAIT_TIME;
             let alphaVal = min(map(growthDuration, 0, 500, 0, 200), 200);
             
-            let c = color(this.color);
+            // On utilise baseColor au lieu de this.color
+            let c = color(baseColor);
             c.setAlpha(alphaVal);
             layer.fill(c);
 
@@ -187,21 +202,25 @@ class Painter {
             layer.pop();
         }
         
+        // Mode Trait (quand en mouvement)
         else if (distMoved > 2) { 
             let strokeW = map(speed, 0, this.maxSpeed, 35, 4);
             strokeW = constrain(strokeW, 4, 45);
             strokeW *= this.scaleFactor;
 
-            layer.stroke(this.color);
+            // On utilise baseColor
+            layer.stroke(baseColor);
             layer.strokeWeight(strokeW);
             layer.strokeCap(ROUND);
             layer.strokeJoin(ROUND);
             
             layer.line(this.prevPos.x, this.prevPos.y, this.pos.x, this.pos.y);
 
+            // Mode Gouttes
             if (speed > 20 && random() > 0.9) {
                 layer.noStroke();
-                let dripCol = color(this.color);
+                // On utilise baseColor
+                let dripCol = color(baseColor);
                 dripCol.setAlpha(180);
                 layer.fill(dripCol);
                 let rs = random(2, 8) * this.scaleFactor;
@@ -210,6 +229,7 @@ class Painter {
         }
     }
     
+    // Note: On n'affiche l'UI (le texte) qu'en mode couleur (humain), donc pas besoin de changer la couleur ici
     drawUI() {
         if (!this.isActive) return;
         
@@ -241,13 +261,12 @@ class Painter {
 // ============================================================
 // 3. SETUP
 // ============================================================
-
+// (Cette section n'a pas changé)
 function setup() {
     pixelDensity(1); 
     let canvas = createCanvas(windowWidth, windowHeight);
     canvas.parent('canvas-container');
     
-    // MODIFICATION ICI : Création de deux calques distincts
     pgHuman = createGraphics(windowWidth, windowHeight);
     pgRandom = createGraphics(windowWidth, windowHeight);
     
@@ -285,7 +304,7 @@ function modelReady() {
 
 
 // ============================================================
-// 4. DRAW
+// 4. DRAW (MODIFIÉE POUR ACTIVER N&B ou COULEUR)
 // ============================================================
 
 function draw() {
@@ -307,9 +326,8 @@ function draw() {
         videoEl.style.opacity = 1; 
     }
 
-    // MODIFICATION ICI : On dessine d'abord le calque Random (fond), puis le calque Humain (devant)
-    image(pgRandom, 0, 0); // Fond
-    image(pgHuman, 0, 0);  // Premier plan
+    image(pgRandom, 0, 0); // Fond N&B
+    image(pgHuman, 0, 0);  // Premier plan Couleur
 
     painters.forEach(p => p.isActive = false);
 
@@ -317,6 +335,7 @@ function draw() {
     // LOGIQUE CALQUES : RANDOM (DERRIÈRE) vs HUMAIN (DEVANT)
     // ==========================================================
     
+    // CAS 1 : Humain détecté -> COULEUR SUR pgHuman
     if (poses.length > 0) {
         for (let i = 0; i < poses.length; i++) {
             if (i < painters.length) {
@@ -341,18 +360,22 @@ function draw() {
 
                     painter.update(targetX, targetY, depthScale);
                     
-                    // IMPORTANT : On dessine sur pgHuman
-                    painter.drawPaint(pgHuman);
+                    // --- MODIFICATION N&B ICI ---
+                    // On passe 'false' comme 2ème argument pour dire "Pas en N&B" (donc en couleur)
+                    painter.drawPaint(pgHuman, false);
+                    
                     painter.drawUI(); 
                 }
             }
         }
     } 
+    // CAS 2 : Personne détectée -> N&B SUR pgRandom
     else {
         painters.forEach(painter => {
             painter.wander(); 
-            // IMPORTANT : On dessine sur pgRandom
-            painter.drawPaint(pgRandom);  
+            // --- MODIFICATION N&B ICI ---
+            // On passe 'true' comme 2ème argument pour dire "En N&B"
+            painter.drawPaint(pgRandom, true);  
         });
     }
 }
@@ -371,15 +394,14 @@ function keyPressed() {
     }
 
     if (key === 'e' || key === 'E') {
-        // MODIFICATION ICI : Pour l'export, on doit combiner les deux calques
         let exportPg = createGraphics(width, height);
         
-        // On remplit le fond selon le mode (blanc par défaut) pour éviter le transparent
-        if (bgMode === 1) exportPg.background(0);
-        else exportPg.background(255);
+        // Fond pour l'export
+        if (bgMode === 1) exportPg.background(0); // Si mode noir, fond noir
+        else exportPg.background(255); // Sinon fond blanc
 
-        exportPg.image(pgRandom, 0, 0); // Couche random
-        exportPg.image(pgHuman, 0, 0);  // Couche humain par dessus
+        exportPg.image(pgRandom, 0, 0); // Couche random N&B
+        exportPg.image(pgHuman, 0, 0);  // Couche humain couleur par dessus
         
         const imgData = exportPg.elt.toDataURL("image/png");
         
@@ -395,15 +417,14 @@ function keyPressed() {
 }
 
 function resetCanvas() {
-    // MODIFICATION ICI : On efface les deux calques
     pgHuman.clear();
     pgRandom.clear();
-    painters.forEach(p => p.assignRandomRole());
+    // Note: On ne réassigne pas les rôles au reset pour garder la cohérence des couleurs
+    // painters.forEach(p => p.assignRandomRole());
 }
 
 function windowResized() {
     resizeCanvas(windowWidth, windowHeight);
-    // MODIFICATION ICI : On redimensionne les deux calques
     pgHuman = createGraphics(windowWidth, windowHeight);
     pgRandom = createGraphics(windowWidth, windowHeight);
 }
