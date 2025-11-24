@@ -4,15 +4,15 @@
 // 0. P2P + QR CODE
 // ============================================================
 
-let peer = new Peer();     // Création du peer
-let p2pConnection = null;  // Connexion active si un mobile se connecte
+let peer = new Peer();
+let p2pConnection = null;
 
 peer.on("open", id => {
     console.log("PeerJS prêt, ID =", id);
 });
 
 function openQrPopup(peerID) {
-    document.getElementById("qrcode-container").innerHTML = ""; // reset
+    document.getElementById("qrcode-container").innerHTML = ""; 
     new QRCode(document.getElementById("qrcode-container"), {
         text: window.location.origin + "/receiver.html#" + peerID,
         width: 220,
@@ -47,14 +47,16 @@ const POSSIBLE_ROLES = [
     { id: 'leftAnkle', label: 'PIED GAUCHE', keyIdx: 13 }
 ];
 
-let videoEl, poseNet, pg;
+let videoEl, poseNet;
+// MODIFICATION ICI : On crée deux calques au lieu d'un seul
+let pgHuman, pgRandom; 
+
 let poses = [];
 let painters = [];
 
-// Gestion des Fonds (Blanc / Noir / Vidéo)
 let bgMode = 0; 
 let modeTimer = 0;
-const RESET_DELAY = 15000; // 15 secondes avant retour automatique au blanc
+const RESET_DELAY = 15000; 
 
 
 // ============================================================
@@ -99,23 +101,15 @@ class Painter {
         this.assignRandomRole(); 
     }
 
-    // --- NOUVEAU : FONCTION DE MOUVEMENT AUTONOME (Mode Random) ---
     wander() {
         this.isActive = true;
-
-        // Utilisation de noise() pour des mouvements fluides (pas chaotiques)
-        // Les valeurs changent doucement en fonction du temps (frameCount)
         let nX = noise(this.id * 100, frameCount * 0.003); 
         let nY = noise(this.id * 200 + 500, frameCount * 0.003);
 
-        // Mapper le bruit (0-1) vers les dimensions de l'écran (avec une marge externe)
         let tx = map(nX, 0, 1, -100, width + 100);
         let ty = map(nY, 0, 1, -100, height + 100);
-
-        // Faire varier légèrement la taille du pinceau
         let autoScale = map(sin(frameCount * 0.02 + this.id), -1, 1, 0.6, 1.4);
 
-        // Utiliser la fonction physique existante pour aller vers ce point
         this.update(tx, ty, autoScale);
     }
 
@@ -154,6 +148,7 @@ class Painter {
         }
     }
 
+    // Cette fonction reçoit maintenant un calque spécifique (layer)
     drawPaint(layer) {
         if (!this.isActive) return;
 
@@ -252,7 +247,9 @@ function setup() {
     let canvas = createCanvas(windowWidth, windowHeight);
     canvas.parent('canvas-container');
     
-    pg = createGraphics(windowWidth, windowHeight);
+    // MODIFICATION ICI : Création de deux calques distincts
+    pgHuman = createGraphics(windowWidth, windowHeight);
+    pgRandom = createGraphics(windowWidth, windowHeight);
     
     videoEl = document.getElementById('video-feed');
     let capture = createCapture(VIDEO, function(stream) {
@@ -310,15 +307,16 @@ function draw() {
         videoEl.style.opacity = 1; 
     }
 
-    image(pg, 0, 0);
+    // MODIFICATION ICI : On dessine d'abord le calque Random (fond), puis le calque Humain (devant)
+    image(pgRandom, 0, 0); // Fond
+    image(pgHuman, 0, 0);  // Premier plan
 
     painters.forEach(p => p.isActive = false);
 
     // ==========================================================
-    // LOGIQUE MODIFIÉE : DÉTECTION vs RANDOM
+    // LOGIQUE CALQUES : RANDOM (DERRIÈRE) vs HUMAIN (DEVANT)
     // ==========================================================
     
-    // Si au moins une personne est détectée
     if (poses.length > 0) {
         for (let i = 0; i < poses.length; i++) {
             if (i < painters.length) {
@@ -343,18 +341,18 @@ function draw() {
 
                     painter.update(targetX, targetY, depthScale);
                     
-                    painter.drawPaint(pg);
-                    painter.drawUI(); // On affiche les labels quand c'est humain
+                    // IMPORTANT : On dessine sur pgHuman
+                    painter.drawPaint(pgHuman);
+                    painter.drawUI(); 
                 }
             }
         }
     } 
-    // Si PERSONNE n'est détecté : Mode Œuvre Random
     else {
         painters.forEach(painter => {
-            painter.wander();       // Calcul du mouvement aléatoire
-            painter.drawPaint(pg);  // Dessin
-            // Pas de drawUI() ici pour un look plus abstrait
+            painter.wander(); 
+            // IMPORTANT : On dessine sur pgRandom
+            painter.drawPaint(pgRandom);  
         });
     }
 }
@@ -373,7 +371,18 @@ function keyPressed() {
     }
 
     if (key === 'e' || key === 'E') {
-        const imgData = pg.elt.toDataURL("image/png");
+        // MODIFICATION ICI : Pour l'export, on doit combiner les deux calques
+        let exportPg = createGraphics(width, height);
+        
+        // On remplit le fond selon le mode (blanc par défaut) pour éviter le transparent
+        if (bgMode === 1) exportPg.background(0);
+        else exportPg.background(255);
+
+        exportPg.image(pgRandom, 0, 0); // Couche random
+        exportPg.image(pgHuman, 0, 0);  // Couche humain par dessus
+        
+        const imgData = exportPg.elt.toDataURL("image/png");
+        
         openQrPopup(peer.id);
         peer.on("connection", conn => {
             p2pConnection = conn;
@@ -386,13 +395,17 @@ function keyPressed() {
 }
 
 function resetCanvas() {
-    pg.clear(); 
+    // MODIFICATION ICI : On efface les deux calques
+    pgHuman.clear();
+    pgRandom.clear();
     painters.forEach(p => p.assignRandomRole());
 }
 
 function windowResized() {
     resizeCanvas(windowWidth, windowHeight);
-    pg = createGraphics(windowWidth, windowHeight);
+    // MODIFICATION ICI : On redimensionne les deux calques
+    pgHuman = createGraphics(windowWidth, windowHeight);
+    pgRandom = createGraphics(windowWidth, windowHeight);
 }
 
 function isPoseValid(pose) {
