@@ -7,104 +7,12 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        /* Animation d'arrivée des images */
-        @keyframes popIn {
-            0% { opacity: 0; transform: scale(0.9) translateY(20px); }
-            100% { opacity: 1; transform: scale(1) translateY(0); }
-        }
-        .gallery-item { animation: popIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+        
     </style>
 </head>
-<body class="bg-black text-white min-h-screen pb-10">
+<body>
 
-    <header class="sticky top-0 bg-black/90 backdrop-blur-md z-10 border-b border-gray-800 p-4 text-center">
-        <h1 class="text-xl font-bold text-yellow-500 tracking-widest uppercase">Teio Gallery</h1>
-        <div class="flex justify-center items-center mt-2 space-x-2">
-            <span id="status-dot" class="w-2 h-2 rounded-full bg-yellow-600 animate-pulse"></span>
-            <span id="status-text" class="text-xs text-gray-400">Connexion à l'installation...</span>
-        </div>
-    </header>
-
-    <main id="gallery" class="p-4 max-w-lg mx-auto space-y-6">
-        </main>
-    
-    <div id="loading-state" class="flex flex-col items-center justify-center mt-20 text-gray-600">
-        <svg class="w-12 h-12 mb-4 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-        <p>Récupération de votre œuvre...</p>
-    </div>
-
-    <script>
-        const urlParams = new URLSearchParams(window.location.search);
-        const hostId = urlParams.get('id');
-        const gallery = document.getElementById('gallery');
-        const statusText = document.getElementById('status-text');
-        const statusDot = document.getElementById('status-dot');
-        const loadingState = document.getElementById('loading-state');
-
-        if (!hostId) {
-            statusText.innerText = "Erreur : ID manquant.";
-            statusDot.classList.replace('bg-yellow-600', 'bg-red-500');
-            loadingState.innerHTML = "<p>Lien invalide.</p>";
-        } else {
-            // Initialisation PeerJS
-            const peer = new Peer();
-
-            peer.on('open', (id) => {
-                // Connexion au PC
-                const conn = peer.connect(hostId);
-
-                conn.on('open', () => {
-                    statusText.innerText = "Connecté ! En attente de l'image...";
-                    statusDot.classList.replace('bg-yellow-600', 'bg-green-500');
-                    // On demande gentiment la dernière image au cas où
-                    conn.send('REQUEST_LATEST');
-                });
-
-                conn.on('data', (data) => {
-                    if (data.file) {
-                        displayImage(data.file);
-                    }
-                });
-
-                conn.on('close', () => {
-                    statusText.innerText = "Déconnecté de la source";
-                    statusDot.classList.replace('bg-green-500', 'bg-red-500');
-                });
-            });
-        }
-
-        function displayImage(blob) {
-            // Cacher le loader
-            if(loadingState) loadingState.style.display = 'none';
-
-            const url = URL.createObjectURL(blob);
-            const date = new Date().toLocaleTimeString();
-
-            // Création de la carte image
-            const div = document.createElement('div');
-            div.className = "gallery-item bg-gray-900 rounded-xl overflow-hidden border border-gray-800 shadow-2xl";
-            div.innerHTML = `
-                <div class="relative">
-                    <img src="${url}" class="w-full h-auto" alt="Oeuvre">
-                </div>
-                <div class="p-4 flex justify-between items-center bg-gray-900">
-                    <div>
-                        <p class="text-white font-bold text-sm">Capture ${date}</p>
-                        <p class="text-gray-500 text-xs">Format PNG HQ</p>
-                    </div>
-                    <a href="${url}" download="teio-art-${Date.now()}.png" 
-                       class="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 px-4 rounded-full text-xs uppercase tracking-wide transition-colors">
-                       Télécharger
-                    </a>
-                </div>
-            `;
-
-            // Ajout en haut de la liste
-            gallery.prepend(div);
-        }
-    </script>
+   
 </body>
 </html>
+
