@@ -38,10 +38,18 @@ function closeQrPopup() {
 // 1. CONFIGURATION ET PALETTES
 // ============================================================
 
-// Palette VIVE pour les humains
-const PALETTE = ['#FF0000', '#0000FF', '#FFD700', '#32CD32', '#9400D3', '#FF8C00', '#00CED1'];
+// --- MODIFICATION ICI : PALETTE VIVE (HUMAIN) ---
+const PALETTE = [
+    '#FFD700', // Jaune
+    '#FFA500', // Orange
+    '#FF0000', // Rouge
+    '#0000FF', // Bleu
+    '#00BFFF', // Bleu clair (Deep Sky Blue)
+    '#00008B', // Bleu foncé
+    '#FFFFFF'  // Blanc
+];
 
-// Palette NEUTRE pour le mode aléatoire (assombrie pour contraste sur blanc)
+// Palette NEUTRE pour le mode aléatoire (IA)
 const NEUTRAL_PALETTE = [
     '#2F2F2F', '#696969', '#808080', '#A9A9A9', '#C0C0C0', '#BCB88A', '#8B8560'
 ];
@@ -91,9 +99,7 @@ class Painter {
 
     assignRandomRole() {
         this.role = random(POSSIBLE_ROLES);
-        // Couleur fixe (identité du peintre) utilisée quand il ne bouge pas trop
         this.color = color(random(PALETTE));
-        // Couleur neutre fixe
         this.neutralColor = color(random(NEUTRAL_PALETTE));
     }
 
@@ -153,7 +159,6 @@ class Painter {
         }
     }
 
-    // --- C'EST ICI QUE ÇA CHANGE ---
     drawPaint(layer, useNeutralPalette) {
         if (!this.isActive) return;
 
@@ -164,11 +169,10 @@ class Painter {
         const WAIT_TIME = 1000; 
         const MAX_BLOT_RADIUS = 120 * this.scaleFactor;
 
-        // Determine la couleur de base (fixe) selon le mode
+        // Choix de la couleur pour les taches immobiles
         let baseFixedColor = useNeutralPalette ? this.neutralColor : this.color;
 
         // 1. TACHES (IMMOBILE)
-        // Quand on ne bouge pas, on utilise la couleur fixe du peintre pour éviter que la tache ne clignote
         if (timeStill > WAIT_TIME) {
             layer.noStroke();
             let growthDuration = timeStill - WAIT_TIME;
@@ -202,13 +206,10 @@ class Painter {
             
             let strokeColor;
 
-            // MODIFICATION ICI : Choix de la couleur en mouvement
             if (useNeutralPalette) {
-                // Mode IA : on garde la couleur neutre fixe
                 strokeColor = this.neutralColor;
             } else {
-                // Mode Humain + Mouvement : On choisit une couleur VIVE aléatoire à chaque frame
-                // Cela crée un effet multicolore dynamique
+                // Mode Humain : Couleur aléatoire dans la nouvelle palette
                 strokeColor = color(random(PALETTE));
             }
 
@@ -223,7 +224,7 @@ class Painter {
             
             layer.line(this.prevPos.x, this.prevPos.y, this.pos.x, this.pos.y);
 
-            // Gouttes (utilisent aussi la couleur aléatoire du moment)
+            // Gouttes
             if (speed > 20 && random() > 0.9) {
                 layer.noStroke();
                 let dripCol = color(strokeColor);
@@ -365,7 +366,7 @@ function draw() {
 
                     painter.update(targetX, targetY, depthScale);
                     
-                    // Dessin sur calque humain, palette VIVE (false)
+                    // Palette Vive et Humain
                     painter.drawPaint(pgHuman, false);
                     
                     painter.drawUI(); 
@@ -377,7 +378,7 @@ function draw() {
     else {
         painters.forEach(painter => {
             painter.wander(); 
-            // Dessin sur calque random, palette NEUTRE (true)
+            // Palette Neutre et IA
             painter.drawPaint(pgRandom, true);  
         });
     }
@@ -385,7 +386,7 @@ function draw() {
 
 
 // ============================================================
-// 5. ÉVÉNEMENTS CLAVIER et RESET
+// 5. ÉVÉNEMENTS CLAVIER
 // ============================================================
 
 function keyPressed() {
@@ -428,10 +429,6 @@ function windowResized() {
     pgHuman = createGraphics(windowWidth, windowHeight);
     pgRandom = createGraphics(windowWidth, windowHeight);
 }
-
-// ============================================================
-// 6. FONCTIONS UTILITAIRES POSE
-// ============================================================
 
 function isPoseValid(pose) {
     if (pose.score < 0.2) return false;
