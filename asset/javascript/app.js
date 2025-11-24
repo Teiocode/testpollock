@@ -38,24 +38,27 @@ function closeQrPopup() {
 // 1. CONFIGURATION ET PALETTES
 // ============================================================
 
-const PALETTE = ['#FF0000', '#0000FF', '#FFD700', '#32CD32', '#9400D3', '#FF8C00', '#00CED1'];
+// Palette VIVE (Mode Humain) : Jaune, Orange, Rouge, Bleus, Blanc
+const PALETTE = [
+    '#FFD700', // Jaune
+    '#FFA500', // Orange
+    '#FF0000', // Rouge
+    '#0000FF', // Bleu standard
+    '#00BFFF', // Bleu clair
+    '#00008B', // Bleu foncé
+    '#FFFFFF'  // Blanc
+];
 
-// CORRECTION ICI : J'ai enlevé le blanc pur et assombri le beige pour qu'on les voie bien sur le fond blanc.
+// Palette NEUTRE (Mode IA) : Gris, Noir, Beiges
 const NEUTRAL_PALETTE = [
-    '#2F2F2F', // Gris très foncé (presque noir)
-    '#696969', // DimGray
-    '#808080', // Gris
-    '#A9A9A9', // DarkGray
-    '#C0C0C0', // Silver (Gris clair visible)
-    '#BCB88A', // Beige Sage (Visible)
-    '#8B8560'  // Taupe (Visible)
+    '#2F2F2F', '#696969', '#808080', '#A9A9A9', '#C0C0C0', '#BCB88A', '#8B8560'
 ];
 
 const POSSIBLE_ROLES = [
-    { id: 'nose', label: 'TÊTE', keyIdx: 0 },
-    { id: 'centroid', label: 'TORSE', keyIdx: -1 }, 
-    { id: 'rightAnkle', label: 'PIED DROIT', keyIdx: 14 },
-    { id: 'leftAnkle', label: 'PIED GAUCHE', keyIdx: 13 }
+    { id: 'nose', label: '', keyIdx: 0 },         // Label vidé
+    { id: 'centroid', label: '', keyIdx: -1 },    // Label vidé
+    { id: 'rightAnkle', label: '', keyIdx: 14 },  // Label vidé
+    { id: 'leftAnkle', label: '', keyIdx: 13 }    // Label vidé
 ];
 
 let videoEl, poseNet;
@@ -77,7 +80,6 @@ class Painter {
     constructor(id) {
         this.id = id;
         
-        // Initialisation des vecteurs
         this.pos = createVector(width / 2, height / 2);
         this.prevPos = createVector(width / 2, height / 2);
         this.target = createVector(width / 2, height / 2);
@@ -85,28 +87,20 @@ class Painter {
         this.vel = createVector(0, 0);
         this.acc = createVector(0, 0);
         
-        this.maxSpeed = 30; 
-        this.maxForce = 0.25; 
+        this.maxSpeed = 35;  // Légèrement plus rapide
+        this.maxForce = 0.4; // Plus de force pour tourner vite
         this.scaleFactor = 1.0; 
         this.targetScale = 1.0; 
         this.lastMoveTime = Date.now(); 
         this.isActive = false; 
 
-        // On assigne les couleurs et rôles
         this.assignRandomRole();
     }
 
     assignRandomRole() {
         this.role = random(POSSIBLE_ROLES);
-        
-        // CORRECTION : On s'assure que les couleurs sont bien choisies à chaque reset
         this.color = color(random(PALETTE));
-        
-        // CORRECTION : On choisit une couleur neutre VISIBLE
-        // random(NEUTRAL_PALETTE) renvoie une string (ex: '#808080')
-        // color() la transforme en objet p5 utilisable
-        let randomNeutral = random(NEUTRAL_PALETTE);
-        this.neutralColor = color(randomNeutral);
+        this.neutralColor = color(random(NEUTRAL_PALETTE));
     }
 
     respawn(x, y) {
@@ -115,7 +109,6 @@ class Painter {
         this.target.set(x, y);
         this.rawTarget.set(x, y);
         this.lastMoveTime = Date.now(); 
-        // Note: on ne change PAS la couleur au respawn automatique pour garder la cohérence
         this.role = random(POSSIBLE_ROLES);
     }
 
@@ -135,8 +128,10 @@ class Painter {
         this.isActive = true;
         this.rawTarget.set(rawX, rawY);
 
-        this.target.x = lerp(this.target.x, this.rawTarget.x, 0.3);
-        this.target.y = lerp(this.target.y, this.rawTarget.y, 0.3);
+        // --- OPTIMISATION RESPONSIVE ---
+        // Lerp augmenté à 0.4 (au lieu de 0.3) pour un suivi plus "collant" et rapide
+        this.target.x = lerp(this.target.x, this.rawTarget.x, 0.4);
+        this.target.y = lerp(this.target.y, this.rawTarget.y, 0.4);
         
         if (newScale) this.targetScale = newScale;
         this.scaleFactor = lerp(this.scaleFactor, this.targetScale, 0.1);
@@ -169,15 +164,16 @@ class Painter {
     drawPaint(layer, useNeutralPalette) {
         if (!this.isActive) return;
 
-        // SÉLECTION DE LA COULEUR : Neutre ou Vive
-        let paintColor = useNeutralPalette ? this.neutralColor : this.color;
-
         let speed = this.vel.mag();
         let distMoved = dist(this.prevPos.x, this.prevPos.y, this.pos.x, this.pos.y);
         let timeStill = Date.now() - this.lastMoveTime;
         
+        // --- LOCK EN 1 SECONDE ---
+        // Le pinceau attend exactement 1000ms avant de faire une tache
         const WAIT_TIME = 1000; 
         const MAX_BLOT_RADIUS = 120 * this.scaleFactor;
+
+        let baseFixedColor = useNeutralPalette ? this.neutralColor : this.color;
 
         // 1. TACHES (IMMOBILE)
         if (timeStill > WAIT_TIME) {
@@ -185,8 +181,7 @@ class Painter {
             let growthDuration = timeStill - WAIT_TIME;
             let alphaVal = min(map(growthDuration, 0, 500, 0, 200), 200);
             
-            // On clone la couleur pour ne pas modifier l'originale
-            let c = color(paintColor); 
+            let c = color(baseFixedColor); 
             c.setAlpha(alphaVal);
             layer.fill(c);
 
@@ -211,21 +206,27 @@ class Painter {
         
         // 2. TRAITS (MOUVEMENT)
         else if (distMoved > 2) { 
+            let strokeColor;
+            if (useNeutralPalette) {
+                strokeColor = this.neutralColor;
+            } else {
+                strokeColor = color(random(PALETTE)); // Couleur aléatoire vive
+            }
+
             let strokeW = map(speed, 0, this.maxSpeed, 35, 4);
             strokeW = constrain(strokeW, 4, 45);
             strokeW *= this.scaleFactor;
 
-            layer.stroke(paintColor);
+            layer.stroke(strokeColor);
             layer.strokeWeight(strokeW);
             layer.strokeCap(ROUND);
             layer.strokeJoin(ROUND);
             
             layer.line(this.prevPos.x, this.prevPos.y, this.pos.x, this.pos.y);
 
-            // Gouttes
             if (speed > 20 && random() > 0.9) {
                 layer.noStroke();
-                let dripCol = color(paintColor);
+                let dripCol = color(strokeColor);
                 dripCol.setAlpha(180);
                 layer.fill(dripCol);
                 let rs = random(2, 8) * this.scaleFactor;
@@ -234,31 +235,8 @@ class Painter {
         }
     }
     
-    drawUI() {
-        if (!this.isActive) return;
-        
-        noStroke();
-        fill(255, 200);
-        
-        let textSizeScaled = constrain(12 * this.scaleFactor, 8, 16);
-        textSize(textSizeScaled);
-        textStyle(BOLD);
-        
-        drawingContext.shadowBlur = 4;
-        drawingContext.shadowColor = "black";
-        text(this.role.label, this.pos.x + (15 * this.scaleFactor), this.pos.y);
-        drawingContext.shadowBlur = 0;
-
-        let timeStill = Date.now() - this.lastMoveTime;
-        if (timeStill > 0 && timeStill < 1000) {
-             noFill();
-             stroke(255, 180);
-             strokeWeight(3 * this.scaleFactor);
-             let rad = 25 * this.scaleFactor;
-             let progress = map(timeStill, 0, 1000, 0, TWO_PI);
-             arc(this.pos.x, this.pos.y, rad, rad, -HALF_PI, -HALF_PI + progress);
-        }
-    }
+    // --- SUPPRESSION DE LA FONCTION drawUI() ---
+    // Les textes et cercles ne sont plus affichés
 }
 
 
@@ -339,7 +317,6 @@ function draw() {
     // LOGIQUE PRINCIPALE
     // ==========================================================
     
-    // CAS 1 : HUMAIN DÉTECTÉ -> DESSIN EN COULEUR VIVE
     if (poses.length > 0) {
         for (let i = 0; i < poses.length; i++) {
             if (i < painters.length) {
@@ -355,7 +332,9 @@ function draw() {
                     let targetX = data.x;
                     let targetY = data.y;
 
-                    if (dist(painter.pos.x, painter.pos.y, targetX, targetY) > 300) {
+                    // --- OPTIMISATION RESPONSIVE ---
+                    // Distance réduite à 200 (au lieu de 300) pour un respawn plus rapide
+                    if (dist(painter.pos.x, painter.pos.y, targetX, targetY) > 200) {
                         painter.respawn(targetX, targetY);
                         data = getBodyPartCoordinates(pose, painter.role); 
                         targetX = data.x; 
@@ -363,20 +342,16 @@ function draw() {
                     }
 
                     painter.update(targetX, targetY, depthScale);
-                    
-                    // ON DESSINE SUR LE CALQUE HUMAIN, EN COULEUR VIVE (false)
                     painter.drawPaint(pgHuman, false);
                     
-                    painter.drawUI(); 
+                    // PLUS DE drawUI() ICI
                 }
             }
         }
     } 
-    // CAS 2 : PERSONNE -> DESSIN AUTOMATIQUE EN COULEURS NEUTRES
     else {
         painters.forEach(painter => {
             painter.wander(); 
-            // ON DESSINE SUR LE CALQUE RANDOM, EN NEUTRE (true)
             painter.drawPaint(pgRandom, true);  
         });
     }
@@ -410,7 +385,6 @@ function keyPressed() {
         peer.on("connection", conn => {
             p2pConnection = conn;
             conn.on("open", () => {
-                console.log("Téléphone connecté : envoi de l’image...");
                 conn.send({ type: "image", data: imgData });
             });
         });
@@ -420,7 +394,6 @@ function keyPressed() {
 function resetCanvas() {
     pgHuman.clear();
     pgRandom.clear();
-    // On réinitialise aussi les couleurs
     painters.forEach(p => p.assignRandomRole());
 }
 
@@ -468,11 +441,10 @@ function getBodyPartCoordinates(pose, role) {
             x = (ls.position.x + rs.position.x) / 2;
             y = (ls.position.y + rs.position.y) / 2;
             score = (ls.score + rs.score) / 2;
-            usedLabel = "TORSE"; 
         }
     }
 
-    return { x: x * scaleX, y: y * scaleY, score, label: usedLabel };
+    return { x: x * scaleX, y: y * scaleY, score, label: "" };
 }
 
 function calculateDepthScale(pose) {
