@@ -2,107 +2,108 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Galerie Live | Teio</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ma Capture | Teio</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    
     <style>
-        body { background-color: #111; color: white; }
-        .fade-in { animation: fadeIn 0.5s ease-out forwards; opacity: 0; transform: translateY(20px); }
-        @keyframes fadeIn { to { opacity: 1; transform: translateY(0); } }
+        /* Animation d'arrivée des images */
+        @keyframes popIn {
+            0% { opacity: 0; transform: scale(0.9) translateY(20px); }
+            100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .gallery-item { animation: popIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards; }
     </style>
 </head>
-<body class="min-h-screen p-4">
+<body class="bg-black text-white min-h-screen pb-10">
 
-    <header class="text-center mb-8 pt-4">
-        <h1 class="text-3xl font-bold text-yellow-500 tracking-widest uppercase">Galerie Live</h1>
-        <p class="text-gray-400 text-sm mt-2" id="status">Connexion à l'installation...</p>
+    <header class="sticky top-0 bg-black/90 backdrop-blur-md z-10 border-b border-gray-800 p-4 text-center">
+        <h1 class="text-xl font-bold text-yellow-500 tracking-widest uppercase">Teio Gallery</h1>
+        <div class="flex justify-center items-center mt-2 space-x-2">
+            <span id="status-dot" class="w-2 h-2 rounded-full bg-yellow-600 animate-pulse"></span>
+            <span id="status-text" class="text-xs text-gray-400">Connexion à l'installation...</span>
+        </div>
     </header>
 
-    <main id="gallery-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
+    <main id="gallery" class="p-4 max-w-lg mx-auto space-y-6">
         </main>
     
-    <div id="empty-msg" class="text-center text-gray-600 mt-20">
-        <p>En attente de nouvelles captures...</p>
+    <div id="loading-state" class="flex flex-col items-center justify-center mt-20 text-gray-600">
+        <svg class="w-12 h-12 mb-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p>Récupération de votre œuvre...</p>
     </div>
 
     <script>
-        // 1. Récupérer l'ID de l'installation depuis l'URL
         const urlParams = new URLSearchParams(window.location.search);
         const hostId = urlParams.get('id');
-
-        const statusEl = document.getElementById('status');
-        const gridEl = document.getElementById('gallery-grid');
-        const emptyMsg = document.getElementById('empty-msg');
+        const gallery = document.getElementById('gallery');
+        const statusText = document.getElementById('status-text');
+        const statusDot = document.getElementById('status-dot');
+        const loadingState = document.getElementById('loading-state');
 
         if (!hostId) {
-            statusEl.innerText = "Erreur : Lien invalide (Manque ID)";
-            statusEl.className = "text-red-500 font-bold";
+            statusText.innerText = "Erreur : ID manquant.";
+            statusDot.classList.replace('bg-yellow-600', 'bg-red-500');
+            loadingState.innerHTML = "<p>Lien invalide.</p>";
         } else {
-            // 2. Initialiser PeerJS
-            const peer = new Peer(); // L'ID du visiteur est auto-généré
+            // Initialisation PeerJS
+            const peer = new Peer();
 
-            peer.on('open', (myId) => {
-                console.log("Visiteur connecté : " + myId);
-                
-                // 3. Se connecter à l'ordinateur principal
+            peer.on('open', (id) => {
+                // Connexion au PC
                 const conn = peer.connect(hostId);
 
                 conn.on('open', () => {
-                    statusEl.innerText = "🟢 Connecté au direct";
-                    statusEl.className = "text-green-400 text-sm mt-2 animate-pulse";
+                    statusText.innerText = "Connecté ! En attente de l'image...";
+                    statusDot.classList.replace('bg-yellow-600', 'bg-green-500');
+                    // On demande gentiment la dernière image au cas où
+                    conn.send('REQUEST_LATEST');
+                });
+
+                conn.on('data', (data) => {
+                    if (data.file) {
+                        displayImage(data.file);
+                    }
                 });
 
                 conn.on('close', () => {
-                    statusEl.innerText = "🔴 Déconnecté";
-                    statusEl.className = "text-red-400 text-sm mt-2";
+                    statusText.innerText = "Déconnecté de la source";
+                    statusDot.classList.replace('bg-green-500', 'bg-red-500');
                 });
-
-                // 4. RÉCEPTION D'UNE IMAGE
-                conn.on('data', (data) => {
-                    if (data.file) {
-                        addImageToGallery(data.file);
-                    }
-                });
-            });
-
-            peer.on('error', (err) => {
-                console.error(err);
-                statusEl.innerText = "Erreur de connexion (Relancez la page)";
             });
         }
 
-        function addImageToGallery(blob) {
-            // Cacher le message "Vide"
-            if(emptyMsg) emptyMsg.style.display = 'none';
+        function displayImage(blob) {
+            // Cacher le loader
+            if(loadingState) loadingState.style.display = 'none';
 
-            // Créer l'URL de l'image
             const url = URL.createObjectURL(blob);
+            const date = new Date().toLocaleTimeString();
 
-            // Créer les éléments HTML
-            const wrapper = document.createElement('div');
-            wrapper.className = "bg-white/10 p-2 rounded-lg shadow-xl fade-in border border-white/20";
-            
-            const img = document.createElement('img');
-            img.src = url;
-            img.className = "w-full h-auto rounded";
-            img.alt = "Oeuvre capturée";
-
-            const info = document.createElement('div');
-            info.className = "flex justify-between items-center mt-2 px-1";
-            
-            const time = new Date().toLocaleTimeString();
-            info.innerHTML = `
-                <span class="text-xs text-gray-400">${time}</span>
-                <a href="${url}" download="teio-art.png" class="text-xs font-bold text-yellow-500 hover:text-yellow-400 uppercase">Télécharger</a>
+            // Création de la carte image
+            const div = document.createElement('div');
+            div.className = "gallery-item bg-gray-900 rounded-xl overflow-hidden border border-gray-800 shadow-2xl";
+            div.innerHTML = `
+                <div class="relative">
+                    <img src="${url}" class="w-full h-auto" alt="Oeuvre">
+                </div>
+                <div class="p-4 flex justify-between items-center bg-gray-900">
+                    <div>
+                        <p class="text-white font-bold text-sm">Capture ${date}</p>
+                        <p class="text-gray-500 text-xs">Format PNG HQ</p>
+                    </div>
+                    <a href="${url}" download="teio-art-${Date.now()}.png" 
+                       class="bg-yellow-500 hover:bg-yellow-400 text-black font-bold py-2 px-4 rounded-full text-xs uppercase tracking-wide transition-colors">
+                       Télécharger
+                    </a>
+                </div>
             `;
 
-            wrapper.appendChild(img);
-            wrapper.appendChild(info);
-
-            // Ajouter AU DÉBUT de la grille (prepend)
-            gridEl.prepend(wrapper);
+            // Ajout en haut de la liste
+            gallery.prepend(div);
         }
     </script>
 </body>
