@@ -1,6 +1,41 @@
 'use strict';
 
 // ============================================================
+// 0. P2P + QR CODE (AJOUTÉ)
+// ============================================================
+
+let peer = new Peer();     // Création du peer
+let p2pConnection = null;  // Connexion active si un mobile se connecte
+
+peer.on("open", id => {
+    console.log("PeerJS prêt, ID =", id);
+});
+
+function openQrPopup(peerID) {
+    document.getElementById("qrcode-container").innerHTML = ""; // reset
+    new QRCode(document.getElementById("qrcode-container"), {
+        text: window.location.origin + "/receiver.html#" + peerID,
+        width: 220,
+        height: 220
+    });
+
+    document.getElementById("qr-result").classList.remove("hidden");
+    document.getElementById("qr-loading").classList.add("hidden");
+
+    const overlay = document.getElementById("qr-overlay");
+    overlay.classList.remove("hidden");
+    setTimeout(() => overlay.classList.add("show"), 20);
+}
+
+function closeQrPopup() {
+    const overlay = document.getElementById("qr-overlay");
+    overlay.classList.remove("show");
+    setTimeout(() => overlay.classList.add("hidden"), 300);
+}
+
+
+
+// ============================================================
 // 1. CONFIGURATION
 // ============================================================
 
@@ -22,9 +57,12 @@ let bgMode = 0;
 let modeTimer = 0;
 const RESET_DELAY = 15000; // 15 secondes avant retour automatique au blanc
 
+
+
 // ============================================================
-// 2. CLASSE PAINTER (L'ARTISTE)
+// 2. CLASSE PAINTER (identique à ton code)
 // ============================================================
+
 class Painter {
     constructor(id) {
         this.id = id;
@@ -42,7 +80,6 @@ class Painter {
         this.maxSpeed = 30; 
         this.maxForce = 0.25; 
         
-        // Profondeur (1.0 = normal)
         this.scaleFactor = 1.0; 
         this.targetScale = 1.0; 
         
@@ -68,15 +105,12 @@ class Painter {
         this.isActive = true;
         this.rawTarget.set(rawX, rawY);
 
-        // Mouvement fluide
         this.target.x = lerp(this.target.x, this.rawTarget.x, 0.3);
         this.target.y = lerp(this.target.y, this.rawTarget.y, 0.3);
         
-        // Changement fluide de la taille (Profondeur)
         if (newScale) this.targetScale = newScale;
         this.scaleFactor = lerp(this.scaleFactor, this.targetScale, 0.1);
 
-        // Physique
         let desired = p5.Vector.sub(this.target, this.pos);
         let d = desired.mag();
         
@@ -110,10 +144,8 @@ class Painter {
         let timeStill = Date.now() - this.lastMoveTime;
         
         const WAIT_TIME = 1000; 
-        // Taille ajustée selon la profondeur
         const MAX_BLOT_RADIUS = 120 * this.scaleFactor;
 
-        // --- TACHE (Immobile) ---
         if (timeStill > WAIT_TIME) {
             layer.noStroke();
             let growthDuration = timeStill - WAIT_TIME;
@@ -135,20 +167,17 @@ class Painter {
                 let yoff = map(sin(a), -1, 1, 0, 2);
                 let noiseVal = noise(xoff + this.id, yoff + this.id, frameCount * 0.01);
                 
-                // On applique l'échelle ici
                 let r = (currentRadius + map(noiseVal, 0, 1, -currentRadius/5, currentRadius/5)) * this.scaleFactor;
                 layer.vertex(r * cos(a), r * sin(a));
             }
             layer.endShape(CLOSE);
             layer.pop();
         }
-        // --- TRAIT (Mouvement) ---
+        
         else if (distMoved > 2) { 
             let strokeW = map(speed, 0, this.maxSpeed, 35, 4);
             strokeW = constrain(strokeW, 4, 45);
-            
-            // On applique l'échelle ici
-            strokeW = strokeW * this.scaleFactor;
+            strokeW *= this.scaleFactor;
 
             layer.stroke(this.color);
             layer.strokeWeight(strokeW);
@@ -195,8 +224,10 @@ class Painter {
     }
 }
 
+
+
 // ============================================================
-// 3. SETUP (INITIALISATION)
+// 3. SETUP
 // ============================================================
 
 function setup() {
@@ -204,10 +235,8 @@ function setup() {
     let canvas = createCanvas(windowWidth, windowHeight);
     canvas.parent('canvas-container');
     
-    // Calque de peinture
     pg = createGraphics(windowWidth, windowHeight);
     
-    // Webcam
     videoEl = document.getElementById('video-feed');
     let capture = createCapture(VIDEO, function(stream) {
         videoEl.srcObject = stream; 
@@ -216,7 +245,6 @@ function setup() {
     capture.size(640, 480); 
     capture.hide();
 
-    // Configuration PoseNet pour voir de loin
     let options = {
         architecture: 'MobileNetV1',
         imageScaleFactor: 0.3, 
@@ -232,47 +260,40 @@ function setup() {
         poses = results;
     });
 
-    // Création des peintres
     for(let i=0; i<6; i++) {
         painters.push(new Painter(i));
     }
 }
 
 function modelReady() {
-    let status = select('#status'); 
-    if(status) {
-        status.html('Système Prêt');
-        status.class('text-yellow-400 font-mono text-sm font-bold');
-    }
+    console.log("PoseNet prêt");
 }
 
+
+
 // ============================================================
-// 4. DRAW (BOUCLE PRINCIPALE)
+// 4. DRAW
 // ============================================================
 
 function draw() {
-    // --- GESTION DU TIMER (Retour automatique au blanc) ---
+
     if (bgMode !== 0) {
-        if (Date.now() - modeTimer > RESET_DELAY) {
-            bgMode = 0;
-        }
+        if (Date.now() - modeTimer > RESET_DELAY) bgMode = 0;
     }
 
-    // --- GESTION DU FOND ---
     if (bgMode === 0) { 
-        background(255); // Blanc
+        background(255);
         videoEl.style.opacity = 0; 
     } 
     else if (bgMode === 1) { 
-        background(0); // Noir
+        background(0);
         videoEl.style.opacity = 0; 
     } 
     else if (bgMode === 2) { 
-        clear(); // Transparent pour voir la vidéo CSS derrière
+        clear();
         videoEl.style.opacity = 1; 
     }
 
-    // Affichage de la peinture
     image(pg, 0, 0);
 
     painters.forEach(p => p.isActive = false);
@@ -281,8 +302,7 @@ function draw() {
         if (i < painters.length) {
             let pose = poses[i].pose;
             let painter = painters[i];
-            
-            // Filtre pour éviter les "fantômes"
+
             if (!isPoseValid(pose)) continue;
 
             let data = getBodyPartCoordinates(pose, painter.role);
@@ -292,11 +312,11 @@ function draw() {
                 let targetX = data.x;
                 let targetY = data.y;
 
-                // Si le point est trop loin, on le téléporte (Respawn)
                 if (dist(painter.pos.x, painter.pos.y, targetX, targetY) > 300) {
                     painter.respawn(targetX, targetY);
                     data = getBodyPartCoordinates(pose, painter.role); 
-                    targetX = data.x; targetY = data.y;
+                    targetX = data.x; 
+                    targetY = data.y;
                 }
 
                 painter.update(targetX, targetY, depthScale);
@@ -308,23 +328,37 @@ function draw() {
     }
 }
 
+
+
 // ============================================================
-// 5. FONCTIONS UTILITAIRES
+// 5. ÉVÉNEMENTS CLAVIER (MODIFIÉ)
 // ============================================================
 
 function keyPressed() {
-    // ESPACE : Change le fond
+
     if (key === ' ') { 
         bgMode++; 
         if (bgMode > 2) bgMode = 0; 
-        if (bgMode === 1 || bgMode === 2) {
-            modeTimer = Date.now();
-        }
+        if (bgMode === 1 || bgMode === 2) modeTimer = Date.now();
     }
-    
-    // E : Sauvegarde locale simple (Capture d'écran)
+
+    // ========= NOUVEAU → Capture + QR Code + envoi P2P ========
     if (key === 'e' || key === 'E') {
-        saveCanvas('Teio_Capture', 'png');
+
+        // 1) Convertit le calque en image
+        const imgData = pg.elt.toDataURL("image/png");
+
+        // 2) Ouvre le QR code avec l’ID PeerJS
+        openQrPopup(peer.id);
+
+        // 3) Attendre la connexion du mobile
+        peer.on("connection", conn => {
+            p2pConnection = conn;
+            conn.on("open", () => {
+                console.log("Téléphone connecté : envoi de l’image...");
+                conn.send({ type: "image", data: imgData });
+            });
+        });
     }
 }
 
@@ -339,8 +373,7 @@ function windowResized() {
 }
 
 function isPoseValid(pose) {
-    if (pose.score < 0.2) return false; 
-    // On vérifie qu'on voit au moins une partie du torse ou la tête
+    if (pose.score < 0.2) return false;
     let nose = pose.keypoints[0];
     let leftShoulder = pose.keypoints[5];
     let rightShoulder = pose.keypoints[6];
@@ -370,7 +403,6 @@ function getBodyPartCoordinates(pose, role) {
         }
     }
     
-    // Fallback sur le torse si le membre n'est pas détecté
     if (score < 0.2) {
         let ls = pose.keypoints[5];
         let rs = pose.keypoints[6];
@@ -391,7 +423,6 @@ function calculateDepthScale(pose) {
     
     if (leftShoulder.score > 0.15 && rightShoulder.score > 0.15) {
         let d = dist(leftShoulder.position.x, leftShoulder.position.y, rightShoulder.position.x, rightShoulder.position.y);
-        // Map : 40px (loin) -> 0.6x | 200px (près) -> 1.4x
         return map(d, 40, 200, 0.6, 1.4, true);
     }
     return null; 
