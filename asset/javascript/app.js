@@ -35,21 +35,10 @@ function closeQrPopup() {
 
 
 // ============================================================
-// 1. CONFIGURATION ET PALETTES
+// 1. CONFIGURATION
 // ============================================================
 
 const PALETTE = ['#FF0000', '#0000FF', '#FFD700', '#32CD32', '#9400D3', '#FF8C00', '#00CED1'];
-
-// CORRECTION ICI : J'ai enlevé le blanc pur et assombri le beige pour qu'on les voie bien sur le fond blanc.
-const NEUTRAL_PALETTE = [
-    '#2F2F2F', // Gris très foncé (presque noir)
-    '#696969', // DimGray
-    '#808080', // Gris
-    '#A9A9A9', // DarkGray
-    '#C0C0C0', // Silver (Gris clair visible)
-    '#BCB88A', // Beige Sage (Visible)
-    '#8B8560'  // Taupe (Visible)
-];
 
 const POSSIBLE_ROLES = [
     { id: 'nose', label: 'TÊTE', keyIdx: 0 },
@@ -59,6 +48,7 @@ const POSSIBLE_ROLES = [
 ];
 
 let videoEl, poseNet;
+// Deux calques distincts : Fond (N&B) et Devant (Couleur)
 let pgHuman, pgRandom; 
 
 let poses = [];
@@ -76,37 +66,37 @@ const RESET_DELAY = 15000;
 class Painter {
     constructor(id) {
         this.id = id;
+        this.assignRandomRole(); 
         
-        // Initialisation des vecteurs
+        // --- COULEURS ---
+        // 1. Couleur vive pour l'humain
+        this.color = color(random(PALETTE));
+        
+        // 2. Couleur Noir & Blanc pour l'IA (basée sur la luminosité de la couleur vive)
+        let grayValue = (red(this.color) + green(this.color) + blue(this.color)) / 3;
+        this.bwColor = color(grayValue); // Crée un gris pur
+
         this.pos = createVector(width / 2, height / 2);
         this.prevPos = createVector(width / 2, height / 2);
         this.target = createVector(width / 2, height / 2);
         this.rawTarget = createVector(width / 2, height / 2);
+        
         this.vel = createVector(0, 0);
         this.acc = createVector(0, 0);
         
         this.maxSpeed = 30; 
         this.maxForce = 0.25; 
+        
         this.scaleFactor = 1.0; 
         this.targetScale = 1.0; 
+        
         this.lastMoveTime = Date.now(); 
         this.isActive = false; 
-
-        // On assigne les couleurs et rôles
-        this.assignRandomRole();
     }
 
     assignRandomRole() {
         this.role = random(POSSIBLE_ROLES);
-        
-        // CORRECTION : On s'assure que les couleurs sont bien choisies à chaque reset
-        this.color = color(random(PALETTE));
-        
-        // CORRECTION : On choisit une couleur neutre VISIBLE
-        // random(NEUTRAL_PALETTE) renvoie une string (ex: '#808080')
-        // color() la transforme en objet p5 utilisable
-        let randomNeutral = random(NEUTRAL_PALETTE);
-        this.neutralColor = color(randomNeutral);
+        // On garde la même couleur pour que le peintre conserve son identité
     }
 
     respawn(x, y) {
@@ -115,12 +105,12 @@ class Painter {
         this.target.set(x, y);
         this.rawTarget.set(x, y);
         this.lastMoveTime = Date.now(); 
-        // Note: on ne change PAS la couleur au respawn automatique pour garder la cohérence
-        this.role = random(POSSIBLE_ROLES);
+        this.assignRandomRole(); 
     }
 
     wander() {
         this.isActive = true;
+        // Mouvement fluide "Perlin Noise"
         let nX = noise(this.id * 100, frameCount * 0.003); 
         let nY = noise(this.id * 200 + 500, frameCount * 0.003);
 
@@ -166,11 +156,12 @@ class Painter {
         }
     }
 
-    drawPaint(layer, useNeutralPalette) {
+    // --- DESSIN : Gère le choix Couleur vs N&B ---
+    drawPaint(layer, useBlackAndWhite) {
         if (!this.isActive) return;
 
-        // SÉLECTION DE LA COULEUR : Neutre ou Vive
-        let paintColor = useNeutralPalette ? this.neutralColor : this.color;
+        // Choix de la couleur : Grayscale si useBlackAndWhite est vrai, sinon Couleur vive
+        let paintColor = useBlackAndWhite ? this.bwColor : this.color;
 
         let speed = this.vel.mag();
         let distMoved = dist(this.prevPos.x, this.prevPos.y, this.pos.x, this.pos.y);
@@ -179,14 +170,13 @@ class Painter {
         const WAIT_TIME = 1000; 
         const MAX_BLOT_RADIUS = 120 * this.scaleFactor;
 
-        // 1. TACHES (IMMOBILE)
+        // 1. TACHES (quand immobile)
         if (timeStill > WAIT_TIME) {
             layer.noStroke();
             let growthDuration = timeStill - WAIT_TIME;
             let alphaVal = min(map(growthDuration, 0, 500, 0, 200), 200);
             
-            // On clone la couleur pour ne pas modifier l'originale
-            let c = color(paintColor); 
+            let c = color(paintColor);
             c.setAlpha(alphaVal);
             layer.fill(c);
 
@@ -209,7 +199,7 @@ class Painter {
             layer.pop();
         }
         
-        // 2. TRAITS (MOUVEMENT)
+        // 2. TRAITS (quand en mouvement)
         else if (distMoved > 2) { 
             let strokeW = map(speed, 0, this.maxSpeed, 35, 4);
             strokeW = constrain(strokeW, 4, 45);
@@ -222,7 +212,7 @@ class Painter {
             
             layer.line(this.prevPos.x, this.prevPos.y, this.pos.x, this.pos.y);
 
-            // Gouttes
+            // Gouttes éclaboussures
             if (speed > 20 && random() > 0.9) {
                 layer.noStroke();
                 let dripCol = color(paintColor);
@@ -313,10 +303,12 @@ function modelReady() {
 
 function draw() {
 
+    // Gestion du timer pour reset le fond automatiquement
     if (bgMode !== 0) {
         if (Date.now() - modeTimer > RESET_DELAY) bgMode = 0;
     }
 
+    // Affichage du fond selon le mode
     if (bgMode === 0) { 
         background(255);
         videoEl.style.opacity = 0; 
@@ -330,6 +322,7 @@ function draw() {
         videoEl.style.opacity = 1; 
     }
 
+    // On affiche d'abord le calque "Random" (fond) puis le calque "Humain" (devant)
     image(pgRandom, 0, 0); 
     image(pgHuman, 0, 0);
 
@@ -339,7 +332,7 @@ function draw() {
     // LOGIQUE PRINCIPALE
     // ==========================================================
     
-    // CAS 1 : HUMAIN DÉTECTÉ -> DESSIN EN COULEUR VIVE
+    // CAS 1 : HUMAIN DÉTECTÉ -> DESSIN EN COULEUR
     if (poses.length > 0) {
         for (let i = 0; i < poses.length; i++) {
             if (i < painters.length) {
@@ -364,7 +357,7 @@ function draw() {
 
                     painter.update(targetX, targetY, depthScale);
                     
-                    // ON DESSINE SUR LE CALQUE HUMAIN, EN COULEUR VIVE (false)
+                    // ON DESSINE SUR LE CALQUE HUMAIN, EN COULEUR (false pour bw)
                     painter.drawPaint(pgHuman, false);
                     
                     painter.drawUI(); 
@@ -372,11 +365,11 @@ function draw() {
             }
         }
     } 
-    // CAS 2 : PERSONNE -> DESSIN AUTOMATIQUE EN COULEURS NEUTRES
+    // CAS 2 : PERSONNE -> DESSIN AUTOMATIQUE EN NOIR ET BLANC
     else {
         painters.forEach(painter => {
             painter.wander(); 
-            // ON DESSINE SUR LE CALQUE RANDOM, EN NEUTRE (true)
+            // ON DESSINE SUR LE CALQUE RANDOM, EN N&B (true pour bw)
             painter.drawPaint(pgRandom, true);  
         });
     }
@@ -396,13 +389,14 @@ function keyPressed() {
     }
 
     if (key === 'e' || key === 'E') {
+        // Pour l'export, on fusionne les deux calques
         let exportPg = createGraphics(width, height);
         
         if (bgMode === 1) exportPg.background(0);
         else exportPg.background(255);
 
-        exportPg.image(pgRandom, 0, 0); 
-        exportPg.image(pgHuman, 0, 0);  
+        exportPg.image(pgRandom, 0, 0); // Fond N&B
+        exportPg.image(pgHuman, 0, 0);  // Devant Couleur
         
         const imgData = exportPg.elt.toDataURL("image/png");
         
@@ -420,8 +414,7 @@ function keyPressed() {
 function resetCanvas() {
     pgHuman.clear();
     pgRandom.clear();
-    // On réinitialise aussi les couleurs
-    painters.forEach(p => p.assignRandomRole());
+    // On garde les mêmes peintres pour ne pas changer leurs couleurs brusquement
 }
 
 function windowResized() {
