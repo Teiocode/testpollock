@@ -43,22 +43,22 @@ const PALETTE = [
     '#FFD700', // Jaune
     '#FFA500', // Orange
     '#FF0000', // Rouge
-    '#0000FF', // Bleu standard
+    '#0000FF', // Bleu
     '#00BFFF', // Bleu clair
     '#00008B', // Bleu foncé
     '#FFFFFF'  // Blanc
 ];
 
-// Palette NEUTRE (Mode IA) : Gris, Noir, Beiges
+// Palette NEUTRE (Mode IA) : Gris, Beige, Noir
 const NEUTRAL_PALETTE = [
     '#2F2F2F', '#696969', '#808080', '#A9A9A9', '#C0C0C0', '#BCB88A', '#8B8560'
 ];
 
 const POSSIBLE_ROLES = [
-    { id: 'nose', label: '', keyIdx: 0 },         // Label vidé
-    { id: 'centroid', label: '', keyIdx: -1 },    // Label vidé
-    { id: 'rightAnkle', label: '', keyIdx: 14 },  // Label vidé
-    { id: 'leftAnkle', label: '', keyIdx: 13 }    // Label vidé
+    { id: 'nose', label: 'TÊTE', keyIdx: 0 },
+    { id: 'centroid', label: 'TORSE', keyIdx: -1 }, 
+    { id: 'rightAnkle', label: 'PIED DROIT', keyIdx: 14 },
+    { id: 'leftAnkle', label: 'PIED GAUCHE', keyIdx: 13 }
 ];
 
 let videoEl, poseNet;
@@ -87,8 +87,8 @@ class Painter {
         this.vel = createVector(0, 0);
         this.acc = createVector(0, 0);
         
-        this.maxSpeed = 35;  // Légèrement plus rapide
-        this.maxForce = 0.4; // Plus de force pour tourner vite
+        this.maxSpeed = 30; 
+        this.maxForce = 0.25; 
         this.scaleFactor = 1.0; 
         this.targetScale = 1.0; 
         this.lastMoveTime = Date.now(); 
@@ -128,10 +128,8 @@ class Painter {
         this.isActive = true;
         this.rawTarget.set(rawX, rawY);
 
-        // --- OPTIMISATION RESPONSIVE ---
-        // Lerp augmenté à 0.4 (au lieu de 0.3) pour un suivi plus "collant" et rapide
-        this.target.x = lerp(this.target.x, this.rawTarget.x, 0.4);
-        this.target.y = lerp(this.target.y, this.rawTarget.y, 0.4);
+        this.target.x = lerp(this.target.x, this.rawTarget.x, 0.3);
+        this.target.y = lerp(this.target.y, this.rawTarget.y, 0.3);
         
         if (newScale) this.targetScale = newScale;
         this.scaleFactor = lerp(this.scaleFactor, this.targetScale, 0.1);
@@ -168,11 +166,10 @@ class Painter {
         let distMoved = dist(this.prevPos.x, this.prevPos.y, this.pos.x, this.pos.y);
         let timeStill = Date.now() - this.lastMoveTime;
         
-        // --- LOCK EN 1 SECONDE ---
-        // Le pinceau attend exactement 1000ms avant de faire une tache
         const WAIT_TIME = 1000; 
         const MAX_BLOT_RADIUS = 120 * this.scaleFactor;
 
+        // Couleur fixe pour les taches (immobile)
         let baseFixedColor = useNeutralPalette ? this.neutralColor : this.color;
 
         // 1. TACHES (IMMOBILE)
@@ -206,11 +203,14 @@ class Painter {
         
         // 2. TRAITS (MOUVEMENT)
         else if (distMoved > 2) { 
+            
             let strokeColor;
+
             if (useNeutralPalette) {
                 strokeColor = this.neutralColor;
             } else {
-                strokeColor = color(random(PALETTE)); // Couleur aléatoire vive
+                // Couleurs vives aléatoires en mouvement
+                strokeColor = color(random(PALETTE));
             }
 
             let strokeW = map(speed, 0, this.maxSpeed, 35, 4);
@@ -224,6 +224,7 @@ class Painter {
             
             layer.line(this.prevPos.x, this.prevPos.y, this.pos.x, this.pos.y);
 
+            // Gouttes
             if (speed > 20 && random() > 0.9) {
                 layer.noStroke();
                 let dripCol = color(strokeColor);
@@ -235,8 +236,7 @@ class Painter {
         }
     }
     
-    // --- SUPPRESSION DE LA FONCTION drawUI() ---
-    // Les textes et cercles ne sont plus affichés
+    // --- J'AI SUPPRIMÉ LA FONCTION drawUI() ICI ---
 }
 
 
@@ -317,6 +317,7 @@ function draw() {
     // LOGIQUE PRINCIPALE
     // ==========================================================
     
+    // CAS 1 : HUMAIN DÉTECTÉ
     if (poses.length > 0) {
         for (let i = 0; i < poses.length; i++) {
             if (i < painters.length) {
@@ -332,9 +333,7 @@ function draw() {
                     let targetX = data.x;
                     let targetY = data.y;
 
-                    // --- OPTIMISATION RESPONSIVE ---
-                    // Distance réduite à 200 (au lieu de 300) pour un respawn plus rapide
-                    if (dist(painter.pos.x, painter.pos.y, targetX, targetY) > 200) {
+                    if (dist(painter.pos.x, painter.pos.y, targetX, targetY) > 300) {
                         painter.respawn(targetX, targetY);
                         data = getBodyPartCoordinates(pose, painter.role); 
                         targetX = data.x; 
@@ -342,16 +341,20 @@ function draw() {
                     }
 
                     painter.update(targetX, targetY, depthScale);
+                    
+                    // Palette Vive et Humain
                     painter.drawPaint(pgHuman, false);
                     
-                    // PLUS DE drawUI() ICI
+                    // --- SUPPRESSION DE L'APPEL A painter.drawUI() ---
                 }
             }
         }
     } 
+    // CAS 2 : PERSONNE -> MODE ALÉATOIRE
     else {
         painters.forEach(painter => {
             painter.wander(); 
+            // Palette Neutre et IA
             painter.drawPaint(pgRandom, true);  
         });
     }
@@ -359,7 +362,7 @@ function draw() {
 
 
 // ============================================================
-// 5. ÉVÉNEMENTS CLAVIER
+// 5. ÉVÉNEMENTS CLAVIER ET RESET
 // ============================================================
 
 function keyPressed() {
@@ -403,6 +406,10 @@ function windowResized() {
     pgRandom = createGraphics(windowWidth, windowHeight);
 }
 
+// ============================================================
+// 6. UTILITAIRES POSE
+// ============================================================
+
 function isPoseValid(pose) {
     if (pose.score < 0.2) return false;
     let nose = pose.keypoints[0];
@@ -441,10 +448,11 @@ function getBodyPartCoordinates(pose, role) {
             x = (ls.position.x + rs.position.x) / 2;
             y = (ls.position.y + rs.position.y) / 2;
             score = (ls.score + rs.score) / 2;
+            usedLabel = "TORSE"; 
         }
     }
 
-    return { x: x * scaleX, y: y * scaleY, score, label: "" };
+    return { x: x * scaleX, y: y * scaleY, score, label: usedLabel };
 }
 
 function calculateDepthScale(pose) {
