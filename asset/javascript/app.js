@@ -19,11 +19,11 @@ let bgMode = 0;
 let modeTimer = 0;
 const RESET_DELAY = 15000;
 
-// Variables P2P (DIFFUSION)
+// --- VARIABLES P2P (DIFFUSION) ---
 let myPeer;
 let peerId = null; 
-// On garde une liste de tous les gens connectés à la galerie
 let connectedPeers = []; 
+let lastCapturedBlob = null; // IMPORTANT : Stocke la dernière photo en mémoire
 
 // ============================================================
 // 2. CLASSE PAINTER
@@ -114,11 +114,10 @@ class Painter {
 }
 
 // ============================================================
-// 3. SETUP & PEERJS BROADCAST
+// 3. SETUP & PEERJS
 // ============================================================
 
 function setup() {
-    // Configuration normale de l'installation
     pixelDensity(1); 
     let canvas = createCanvas(windowWidth, windowHeight);
     canvas.parent('canvas-container');
@@ -130,20 +129,29 @@ function setup() {
     });
     capture.size(640, 480); capture.hide();
 
-    // 1. Initialiser PeerJS (Le Serveur de Diffusion)
+    // 1. Démarrage du Serveur P2P
     myPeer = new Peer();
     
     myPeer.on('open', (id) => {
         peerId = id; 
-        console.log("INSTALLATION PRÊTE. ID: " + peerId);
+        console.log("ID INSTALLATION : " + peerId);
     });
 
-    // 2. Gérer les nouvelles connexions (Les Galeries Mobiles)
+    // 2. Gestion des Connexions Entrantes
     myPeer.on('connection', (conn) => {
-        console.log("Nouvelle Galerie connectée !");
-        connectedPeers.push(conn); // On l'ajoute à la liste
+        console.log("Nouveau visiteur connecté !");
+        connectedPeers.push(conn);
 
-        // Si la connexion se coupe, on le retire de la liste
+        // ASTUCE : Dès qu'il se connecte, s'il y a une image en mémoire, on l'envoie direct !
+        // Comme ça il n'a pas besoin d'attendre la PROCHAINE capture.
+        conn.on('open', () => {
+             if (lastCapturedBlob) {
+                 console.log("Envoi de l'image en mémoire au nouveau venu...");
+                 conn.send({ file: lastCapturedBlob, type: 'image/png' });
+             }
+        });
+
+        // Nettoyage si déconnexion
         conn.on('close', () => {
             connectedPeers = connectedPeers.filter(p => p !== conn);
         });
@@ -194,7 +202,7 @@ function draw() {
 }
 
 // ============================================================
-// 5. FONCTIONS UTILITAIRES & CAPTURE
+// 5. FONCTIONS & LOGIQUE CAPTURE
 // ============================================================
 
 function modelReady() {
@@ -207,7 +215,7 @@ function keyPressed() {
         bgMode++; if (bgMode > 2) bgMode = 0; if (bgMode === 1 || bgMode === 2) modeTimer = Date.now();
     }
     
-    // TOUCHE 'E' : CAPTURE + QR CODE + ENVOI AUX GALERIES
+    // TOUCHE 'E'
     if (key === 'e' || key === 'E') {
         handleCaptureAndBroadcast();
     }
@@ -216,26 +224,24 @@ function keyPressed() {
 function handleCaptureAndBroadcast() {
     if (!peerId) { alert("Attente du réseau..."); return; }
 
-    // 1. AFFICHER LE QR CODE POUR REJOINDRE LA GALERIE
+    // 1. Générer le QR Code vers gallery.html
     generateGalleryQrCode();
 
-    // 2. CAPTURER ET DIFFUSER L'IMAGE
+    // 2. Capturer l'image
     let canvasDom = document.getElementById('defaultCanvas0'); 
     
-    // Export PNG Haute Qualité
     canvasDom.toBlob(function(blob) {
-        console.log("Image capturée. Diffusion à " + connectedPeers.length + " galeries...");
+        console.log("📸 Image capturée !");
+        
+        // IMPORTANT : On sauvegarde l'image en mémoire globale
+        lastCapturedBlob = blob;
 
-        // BOUCLE : On envoie l'image à TOUS les appareils connectés
+        // On envoie à tous ceux DÉJÀ connectés
         connectedPeers.forEach(conn => {
-            if (conn.open) { // Vérifie si la connexion est toujours active
-                conn.send({ 
-                    file: blob,
-                    type: 'image/png'
-                });
+            if (conn.open) {
+                conn.send({ file: blob, type: 'image/png' });
             }
         });
-
     }, 'image/png');
 }
 
@@ -247,17 +253,14 @@ function generateGalleryQrCode() {
     document.getElementById('qr-loading').classList.add('hidden'); 
     document.getElementById('qr-result').classList.remove('hidden'); 
     
-    // Texte du Popup
-    document.querySelector('#qr-result h2').innerText = "Rejoindre la Galerie Live";
-    document.querySelector('#qr-result p').innerText = "Scannez pour voir les œuvres apparaître en direct";
+    document.querySelector('#qr-result h2').innerText = "Récupérer l'œuvre";
+    document.querySelector('#qr-result p').innerText = "Scannez pour télécharger la capture";
 
-    // IMPORTANT : On pointe vers gallery.html
-    // On prend l'URL actuelle, on enlève 'index.html' si présent, et on ajoute gallery.html
-    let baseUrl = window.location.href.substring(0, window.location.href.lastIndexOf('/'));
-    // Si on est à la racine (ex: localhost:5500/), baseUrl peut être vide ou incorrect, ajustement :
-    if(window.location.href.endsWith('/')) baseUrl = window.location.href.slice(0, -1);
+    // Construction URL vers gallery.html
+    let currentUrl = window.location.href;
+    let baseUrl = currentUrl.substring(0, currentUrl.lastIndexOf('/'));
+    if(currentUrl.endsWith('/')) baseUrl = currentUrl.slice(0, -1);
     
-    // URL Finale : site.com/gallery.html?id=PEER_ID
     let galleryUrl = baseUrl + "/gallery.html?id=" + peerId;
 
     console.log("Lien Galerie : " + galleryUrl);
