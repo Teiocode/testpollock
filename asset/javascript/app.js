@@ -35,21 +35,20 @@ function closeQrPopup() {
 
 
 // ============================================================
-// 1. CONFIGURATION
+// 1. CONFIGURATION ET PALETTES
 // ============================================================
 
-// Palette VIVE pour les humains
 const PALETTE = ['#FF0000', '#0000FF', '#FFD700', '#32CD32', '#9400D3', '#FF8C00', '#00CED1'];
 
-// --- NOUVEAU : Palette NEUTRE pour le mode aléatoire ---
+// CORRECTION ICI : J'ai enlevé le blanc pur et assombri le beige pour qu'on les voie bien sur le fond blanc.
 const NEUTRAL_PALETTE = [
-    '#000000', // Noir
-    '#FFFFFF', // Blanc
-    '#808080', // Gris moyen
-    '#A9A9A9', // Gris foncé
-    '#D3D3D3', // Gris clair
-    '#F5F5DC', // Beige classique
-    '#E8DCCA'  // Beige crème
+    '#2F2F2F', // Gris très foncé (presque noir)
+    '#696969', // DimGray
+    '#808080', // Gris
+    '#A9A9A9', // DarkGray
+    '#C0C0C0', // Silver (Gris clair visible)
+    '#BCB88A', // Beige Sage (Visible)
+    '#8B8560'  // Taupe (Visible)
 ];
 
 const POSSIBLE_ROLES = [
@@ -60,7 +59,6 @@ const POSSIBLE_ROLES = [
 ];
 
 let videoEl, poseNet;
-// Deux calques distincts : Fond (Neutre) et Devant (Couleur vive)
 let pgHuman, pgRandom; 
 
 let poses = [];
@@ -78,38 +76,37 @@ const RESET_DELAY = 15000;
 class Painter {
     constructor(id) {
         this.id = id;
-        this.assignRandomRole(); 
         
-        // --- COULEURS ---
-        // 1. Couleur VIVE pour le mode humain
-        this.color = color(random(PALETTE));
-        
-        // --- MODIFICATION ICI ---
-        // 2. Couleur NEUTRE pour le mode IA (Noir, Blanc, Gris, Beige)
-        // On choisit aléatoirement dans la nouvelle palette neutre
-        this.neutralColor = color(random(NEUTRAL_PALETTE));
-
+        // Initialisation des vecteurs
         this.pos = createVector(width / 2, height / 2);
         this.prevPos = createVector(width / 2, height / 2);
         this.target = createVector(width / 2, height / 2);
         this.rawTarget = createVector(width / 2, height / 2);
-        
         this.vel = createVector(0, 0);
         this.acc = createVector(0, 0);
         
         this.maxSpeed = 30; 
         this.maxForce = 0.25; 
-        
         this.scaleFactor = 1.0; 
         this.targetScale = 1.0; 
-        
         this.lastMoveTime = Date.now(); 
         this.isActive = false; 
+
+        // On assigne les couleurs et rôles
+        this.assignRandomRole();
     }
 
     assignRandomRole() {
         this.role = random(POSSIBLE_ROLES);
-        // On garde les mêmes couleurs assignées au départ
+        
+        // CORRECTION : On s'assure que les couleurs sont bien choisies à chaque reset
+        this.color = color(random(PALETTE));
+        
+        // CORRECTION : On choisit une couleur neutre VISIBLE
+        // random(NEUTRAL_PALETTE) renvoie une string (ex: '#808080')
+        // color() la transforme en objet p5 utilisable
+        let randomNeutral = random(NEUTRAL_PALETTE);
+        this.neutralColor = color(randomNeutral);
     }
 
     respawn(x, y) {
@@ -118,12 +115,12 @@ class Painter {
         this.target.set(x, y);
         this.rawTarget.set(x, y);
         this.lastMoveTime = Date.now(); 
-        this.assignRandomRole(); 
+        // Note: on ne change PAS la couleur au respawn automatique pour garder la cohérence
+        this.role = random(POSSIBLE_ROLES);
     }
 
     wander() {
         this.isActive = true;
-        // Mouvement fluide "Perlin Noise"
         let nX = noise(this.id * 100, frameCount * 0.003); 
         let nY = noise(this.id * 200 + 500, frameCount * 0.003);
 
@@ -169,12 +166,10 @@ class Painter {
         }
     }
 
-    // --- DESSIN : Gère le choix Couleur vs Neutre ---
     drawPaint(layer, useNeutralPalette) {
         if (!this.isActive) return;
 
-        // Choix de la couleur : Palette Neutre si demandé, sinon Palette Vive
-        // MODIFICATION ICI : on utilise this.neutralColor
+        // SÉLECTION DE LA COULEUR : Neutre ou Vive
         let paintColor = useNeutralPalette ? this.neutralColor : this.color;
 
         let speed = this.vel.mag();
@@ -184,13 +179,14 @@ class Painter {
         const WAIT_TIME = 1000; 
         const MAX_BLOT_RADIUS = 120 * this.scaleFactor;
 
-        // 1. TACHES (quand immobile)
+        // 1. TACHES (IMMOBILE)
         if (timeStill > WAIT_TIME) {
             layer.noStroke();
             let growthDuration = timeStill - WAIT_TIME;
             let alphaVal = min(map(growthDuration, 0, 500, 0, 200), 200);
             
-            let c = color(paintColor);
+            // On clone la couleur pour ne pas modifier l'originale
+            let c = color(paintColor); 
             c.setAlpha(alphaVal);
             layer.fill(c);
 
@@ -213,7 +209,7 @@ class Painter {
             layer.pop();
         }
         
-        // 2. TRAITS (quand en mouvement)
+        // 2. TRAITS (MOUVEMENT)
         else if (distMoved > 2) { 
             let strokeW = map(speed, 0, this.maxSpeed, 35, 4);
             strokeW = constrain(strokeW, 4, 45);
@@ -226,7 +222,7 @@ class Painter {
             
             layer.line(this.prevPos.x, this.prevPos.y, this.pos.x, this.pos.y);
 
-            // Gouttes éclaboussures
+            // Gouttes
             if (speed > 20 && random() > 0.9) {
                 layer.noStroke();
                 let dripCol = color(paintColor);
@@ -317,12 +313,10 @@ function modelReady() {
 
 function draw() {
 
-    // Gestion du timer pour reset le fond automatiquement
     if (bgMode !== 0) {
         if (Date.now() - modeTimer > RESET_DELAY) bgMode = 0;
     }
 
-    // Affichage du fond selon le mode
     if (bgMode === 0) { 
         background(255);
         videoEl.style.opacity = 0; 
@@ -336,7 +330,6 @@ function draw() {
         videoEl.style.opacity = 1; 
     }
 
-    // On affiche d'abord le calque "Random" (fond) puis le calque "Humain" (devant)
     image(pgRandom, 0, 0); 
     image(pgHuman, 0, 0);
 
@@ -403,14 +396,13 @@ function keyPressed() {
     }
 
     if (key === 'e' || key === 'E') {
-        // Pour l'export, on fusionne les deux calques
         let exportPg = createGraphics(width, height);
         
         if (bgMode === 1) exportPg.background(0);
         else exportPg.background(255);
 
-        exportPg.image(pgRandom, 0, 0); // Fond Neutre
-        exportPg.image(pgHuman, 0, 0);  // Devant Vive
+        exportPg.image(pgRandom, 0, 0); 
+        exportPg.image(pgHuman, 0, 0);  
         
         const imgData = exportPg.elt.toDataURL("image/png");
         
@@ -428,7 +420,8 @@ function keyPressed() {
 function resetCanvas() {
     pgHuman.clear();
     pgRandom.clear();
-    // On garde les mêmes peintres pour ne pas changer leurs couleurs brusquement
+    // On réinitialise aussi les couleurs
+    painters.forEach(p => p.assignRandomRole());
 }
 
 function windowResized() {
