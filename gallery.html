@@ -1,18 +1,37 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Ma Capture | Teio</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Récupération de l’œuvre</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-    <style>
-        
-    </style>
 </head>
-<body>
+<body style="background:black;color:white;text-align:center;padding:30px">
 
-   
+    <h1>Récupération en cours…</h1>
+    <p id="status">Connexion au serveur…</p>
+    <img id="img" style="display:none;max-width:90vw;max-height:80vh;border:2px solid white"/>
+
+<script>
+let id = location.hash.replace("#",""); 
+let peer = new Peer();
+
+peer.on("open", myid => {
+    document.getElementById("status").innerText = "Connexion à l’ordinateur…";
+
+    let conn = peer.connect(id);
+
+    conn.on("data", msg => {
+        if (msg.type === "image") {
+            let img = document.getElementById("img");
+            img.src = msg.data;
+            img.style.display = "block";
+
+            document.getElementById("status").innerText = "Image reçue !";
+        }
+    });
+});
+</script>
+
 </body>
 </html>
 
